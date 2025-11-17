@@ -33,12 +33,12 @@ PRIMES = [7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47,
     199, 211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277,
     281, 283, 293, 307, 311, 313, 317, 331, 337, 347, 349, 353, 359, 367]
 
-GAMEMODE_DESCRIPTIONS = ["normal dive", "permanent seeds", "2, 3, 5, 7 only"]
-RESET_QUIPS = ["reset", "are you sure?", "you'll lose everything.", "there's no going back."] + [f"click {i} more times to reset" for i in range(5, 0, -1)]
+GAMEMODE_DESCRIPTIONS = ["pydive", "classic dive", "permanent seeds", "2, 3, 5, 7 only"]
+RESET_QUIPS = ["reset profile", "are you sure?", "you'll lose everything.", "there's no going back."] + [f"click {i} time{"s" if i!=1 else ""} to reset" for i in range(5, 0, -1)]
 
 class Board:
     
-    def __init__(self, width, height, mode=0):
+    def __init__(self, width, height, mode=1):
 
         # basic variables
         self.width = width
@@ -74,6 +74,8 @@ class Board:
         elif self.mode == 1:
             self.seeds = [2]
         elif self.mode == 2:
+            self.seeds = [2]
+        elif self.mode == 3:
             self.seeds = [2,3,5,7]
         self.all_seeds = [x for x in self.seeds]
         self.spawn_tiles(2)
@@ -279,7 +281,7 @@ class Board:
             return False
         
         # do seed math
-        if self.mode == 0 or self.mode == 1:
+        if self.mode == 0 or self.mode == 1 or self.mode == 2:
 
             self.anim_seeds = []
             old_seeds = [x for x in self.seeds]
@@ -292,7 +294,7 @@ class Board:
             self.seeds += new_seeds
 
             # remove old seeds
-            if self.mode == 0:
+            if self.mode == 0 or self.mode == 1:
 
                 self.remove_seeds()
 
@@ -322,7 +324,7 @@ class Board:
         
         return True
     
-    def display_seed_list(self, seed_size, border, columns, anim_timer):
+    def display_seed_list(self, seed_size, border, columns, scroll, anim_timer):
 
         if anim_timer < 1.0:
             rows = math.ceil(max(len([1 for x in self.anim_seeds if x[1] != None]),len([1 for x in self.anim_seeds if x[2] != None]))/float(columns))
@@ -516,7 +518,9 @@ class Profile:
 
         self.name = name
 
-        self.settings = {"width": 4, "height": 4, "mode": 0, "animspeed": 250, "particles": True}
+        self.default_settings = {"width": 4, "height": 4, "mode": 1}
+
+        self.settings = {"width": 4, "height": 4, "mode": 1, "animspeed": 250, "particles": True}
         self.board = None
 
         self.stats = {"highscore": 0, "history": [], "svalbard": []}
@@ -526,7 +530,10 @@ class Profile:
         self.restart_game()
 
     def has_default_settings(self):
-        return (self.settings["height"] == 4) and (self.settings["width"] == 4) and (self.settings["mode"] == 0)
+        for i in self.default_settings:
+            if self.default_settings[i] != self.settings[i]:
+                return False
+        return True
     
     # add the current board's stats to our stats and clear the board
     def update_stats(self):
@@ -783,41 +790,45 @@ def configure_ui(board):
         "stats": Button((DISPLAY_WIDTH*0.75+border_size, 
                         get_grid_width(button_size, border_size, 4), min(DISPLAY_WIDTH*0.25-border_size*2, button_size*3), button_size),
                         text="stats"),
+        "profile": Button((DISPLAY_WIDTH*0.75+border_size, 
+                        get_grid_width(button_size, border_size, 5), min(DISPLAY_WIDTH*0.25-border_size*2, button_size*3), button_size),
+                        text="profile"),
     }
 
     settings_buttons = {
-        "mode_left": Button((0, button_size, button_size, button_size),
+        "left_1": Button((0, button_size, button_size, button_size),
                         img=pg.transform.rotate(button_arrow_off_sprite, 180),
                         hover_img=pg.transform.rotate(button_arrow_on_sprite, 180)),
-        "mode_right": Button((DISPLAY_WIDTH-button_size, button_size, button_size, button_size),
+        "right_1": Button((DISPLAY_WIDTH-button_size, button_size, button_size, button_size),
                         img=button_arrow_off_sprite,
                         hover_img=button_arrow_on_sprite),
-        "width_left": Button((0, button_size*2, button_size, button_size),
+        "left_2": Button((0, button_size*2, button_size, button_size),
                         img=pg.transform.rotate(button_arrow_off_sprite, 180),
                         hover_img=pg.transform.rotate(button_arrow_on_sprite, 180)),
-        "width_right": Button((DISPLAY_WIDTH-button_size, button_size*2, button_size, button_size),
+        "right_2": Button((DISPLAY_WIDTH-button_size, button_size*2, button_size, button_size),
                         img=button_arrow_off_sprite,
                         hover_img=button_arrow_on_sprite),
-        "height_left": Button((0, button_size*3, button_size, button_size),
+        "left_3": Button((0, button_size*3, button_size, button_size),
                         img=pg.transform.rotate(button_arrow_off_sprite, 180),
                         hover_img=pg.transform.rotate(button_arrow_on_sprite, 180)),
-        "height_right": Button((DISPLAY_WIDTH-button_size, button_size*3, button_size, button_size),
+        "right_3": Button((DISPLAY_WIDTH-button_size, button_size*3, button_size, button_size),
                         img=button_arrow_off_sprite,
                         hover_img=button_arrow_on_sprite),
-        "animspeed_left": Button((0, button_size*4, button_size, button_size),
+        "left_4": Button((0, button_size*4, button_size, button_size),
                         img=pg.transform.rotate(button_arrow_off_sprite, 180),
                         hover_img=pg.transform.rotate(button_arrow_on_sprite, 180)),
-        "animspeed_right": Button((DISPLAY_WIDTH-button_size, button_size*4, button_size, button_size),
+        "right_4": Button((DISPLAY_WIDTH-button_size, button_size*4, button_size, button_size),
                         img=button_arrow_off_sprite,
                         hover_img=button_arrow_on_sprite),
-        "particles_left": Button((0, button_size*5, button_size, button_size),
+        "left_5": Button((0, button_size*5, button_size, button_size),
                         img=pg.transform.rotate(button_arrow_off_sprite, 180),
                         hover_img=pg.transform.rotate(button_arrow_on_sprite, 180)),
-        "particles_right": Button((DISPLAY_WIDTH-button_size, button_size*5, button_size, button_size),
+        "right_5": Button((DISPLAY_WIDTH-button_size, button_size*5, button_size, button_size),
                         img=button_arrow_off_sprite,
                         hover_img=button_arrow_on_sprite),
         "back": Button((button_size, DISPLAY_HEIGHT-button_size*2, DISPLAY_WIDTH-button_size*2, button_size),
                         text="back"),
+        "next_page": Button((button_size, DISPLAY_HEIGHT-button_size*3, DISPLAY_WIDTH-button_size*2, button_size)),
     }
 
     save_buttons = {
@@ -863,7 +874,7 @@ def load_profile(profile_name):
 
 pg.init()
 main_dis = pg.display.set_mode(DISPLAY_SIZE, flags=pg.RESIZABLE)
-pg.display.set_caption("dive: python edition")
+pg.display.set_caption("pydive")
 clock = pg.time.Clock()
 
 prime_sprites = [pg.image.load(PATH+f"sprites/tile_{x}.png").convert_alpha() for x in PRIMES]
@@ -932,6 +943,8 @@ while game_running:
                             
                         elif b == "settings":
                             menu = "settings"
+                            settings_page = 1
+                            settings_buttons["next_page"].text = f"page {settings_page}"
 
                         elif b == "save":
                             menu = "save"
@@ -944,41 +957,55 @@ while game_running:
                             stats_page = 1
                             reset_count = 0
                             stats_buttons["reset"].text = RESET_QUIPS[reset_count]
+                        
+                        elif b == "profile":
+                            menu = "profile"
 
             elif menu == "settings": # settings menu
                 for b in settings_buttons:
                     if settings_buttons[b].collide(pg.mouse.get_pos()):
-
-                        if b == "mode_left":
-                            if profile.settings["mode"] > 0:
-                                profile.settings["mode"] -= 1
-                        elif b == "mode_right":
-                            if profile.settings["mode"] < 2:
-                                profile.settings["mode"] += 1
-                        elif b == "width_left":
-                            if profile.settings["width"] > 1:
-                                profile.settings["width"] -= 1
-                        elif b == "width_right":
-                            if profile.settings["width"] < 10:
-                                profile.settings["width"] += 1
-                        elif b == "height_left":
-                            if profile.settings["height"] > 1:
-                                profile.settings["height"] -= 1
-                        elif b == "height_right":
-                            if profile.settings["height"] < 10:
-                                profile.settings["height"] += 1
-                        elif b == "animspeed_left":
-                            if profile.settings["animspeed"] > 0:
-                                profile.settings["animspeed"] -= 50
-                        elif b == "animspeed_right":
-                            if profile.settings["animspeed"] < 1000:
-                                profile.settings["animspeed"] += 50
-                        elif b == "particles_left":
-                            profile.settings["particles"] = False
-                        elif b == "particles_right":
-                            profile.settings["particles"] = True
-                        elif b == "back":
+                        
+                        if b == "back":
                             menu = ""
+                        elif b == "next_page":
+                            settings_page += 1
+                            if settings_page > 2:
+                                settings_page = 1
+                            settings_buttons["next_page"].text = f"page {settings_page}"
+
+                        if settings_page == 1:
+                            if b == "left_1":
+                                if profile.settings["mode"] > 0:
+                                    profile.settings["mode"] -= 1
+                            elif b == "right_1":
+                                if profile.settings["mode"] < 3:
+                                    profile.settings["mode"] += 1
+                            elif b == "left_2":
+                                if profile.settings["width"] > 1:
+                                    profile.settings["width"] -= 1
+                            elif b == "right_2":
+                                if profile.settings["width"] < 10:
+                                    profile.settings["width"] += 1
+                            elif b == "left_3":
+                                if profile.settings["height"] > 1:
+                                    profile.settings["height"] -= 1
+                            elif b == "right_3":
+                                if profile.settings["height"] < 10:
+                                    profile.settings["height"] += 1
+
+                        elif settings_page == 2:
+                                
+                            if b == "left_1":
+                                if profile.settings["animspeed"] > 0:
+                                    profile.settings["animspeed"] -= 50
+                            elif b == "right_1":
+                                if profile.settings["animspeed"] < 1000:
+                                    profile.settings["animspeed"] += 50
+                            elif b == "left_2":
+                                profile.settings["particles"] = False
+                            elif b == "right_2":
+                                profile.settings["particles"] = True
+                            
 
             elif menu == "save": # save/load menu
                 for b in save_buttons:
@@ -1079,7 +1106,7 @@ while game_running:
         board_surf = board.display(tile_size, border_size, anim_timer)
         main_dis.blit(board_surf, board_pos.topleft)
 
-        seed_list_surf = board.display_seed_list(seed_size, border_size, seed_columns, anim_timer)
+        seed_list_surf = board.display_seed_list(seed_size, border_size, seed_columns, 1, anim_timer)
         main_dis.blit(seed_list_surf, seed_pos.topleft)
 
         if anim_timer < 0.5:
@@ -1100,15 +1127,22 @@ while game_running:
         display_particles(main_dis)
 
     elif menu == "settings": # settings menu
-        center_text(main_dis, huge_font, "settings (apply to new games only)", BLACK, DISPLAY_WIDTH*0.5, button_size*0.5)
-        
-        center_text(main_dis, huge_font, f"gamemode: {GAMEMODE_DESCRIPTIONS[profile.settings["mode"]]}", BLACK, DISPLAY_WIDTH*0.5, button_size*1.5)
-        center_text(main_dis, huge_font, f"width: {profile.settings["width"]}", BLACK, DISPLAY_WIDTH*0.5, button_size*2.5)
-        center_text(main_dis, huge_font, f"height: {profile.settings["height"]}", BLACK, DISPLAY_WIDTH*0.5, button_size*3.5)
-        center_text(main_dis, huge_font, f"anim speed: {profile.settings["animspeed"]}ms", BLACK, DISPLAY_WIDTH*0.5, button_size*4.5)
-        center_text(main_dis, huge_font, f"particles: {"on" if profile.settings["particles"] else "off"}", BLACK, DISPLAY_WIDTH*0.5, button_size*5.5)
-        if not profile.has_default_settings():
-            center_text(main_dis, huge_font, f"note: stats disabled", BLACK, DISPLAY_WIDTH*0.5, DISPLAY_HEIGHT-button_size*0.5)
+
+        if settings_page == 1:
+            center_text(main_dis, huge_font, "game settings (apply to new games only)", BLACK, DISPLAY_WIDTH*0.5, button_size*0.5)
+            
+            center_text(main_dis, huge_font, f"gamemode: {GAMEMODE_DESCRIPTIONS[profile.settings["mode"]]}", BLACK, DISPLAY_WIDTH*0.5, button_size*1.5)
+            center_text(main_dis, huge_font, f"width: {profile.settings["width"]}", BLACK, DISPLAY_WIDTH*0.5, button_size*2.5)
+            center_text(main_dis, huge_font, f"height: {profile.settings["height"]}", BLACK, DISPLAY_WIDTH*0.5, button_size*3.5)
+
+            if not profile.has_default_settings():
+                center_text(main_dis, huge_font, f"note: stats disabled", BLACK, DISPLAY_WIDTH*0.5, DISPLAY_HEIGHT-button_size*0.5)
+
+        elif settings_page == 2:
+            center_text(main_dis, huge_font, "visual settings", BLACK, DISPLAY_WIDTH*0.5, button_size*0.5)
+            
+            center_text(main_dis, huge_font, f"anim speed: {profile.settings["animspeed"]}ms", BLACK, DISPLAY_WIDTH*0.5, button_size*1.5)
+            center_text(main_dis, huge_font, f"particles: {"on" if profile.settings["particles"] else "off"}", BLACK, DISPLAY_WIDTH*0.5, button_size*2.5)
 
         for b in settings_buttons:
             settings_buttons[b].display(main_dis, pg.mouse.get_pos())
