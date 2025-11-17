@@ -33,7 +33,7 @@ PRIMES = [7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47,
     199, 211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277,
     281, 283, 293, 307, 311, 313, 317, 331, 337, 347, 349, 353, 359, 367]
 
-GAMEMODE_DESCRIPTIONS = ["pydive", "classic dive", "permanent seeds", "2, 3, 5, 7 only"]
+GAMEMODE_DESCRIPTIONS = ["pydive (in development)", "classic dive", "permanent seeds", "2, 3, 5, 7 only"]
 RESET_QUIPS = ["reset profile", "are you sure?", "you'll lose everything.", "there's no going back."] + [f"click {i} time{"s" if i!=1 else ""} to reset" for i in range(5, 0, -1)]
 
 class Board:
@@ -518,16 +518,44 @@ class Profile:
 
         self.name = name
 
-        self.default_settings = {"width": 4, "height": 4, "mode": 1}
-
-        self.settings = {"width": 4, "height": 4, "mode": 1, "animspeed": 250, "particles": True}
         self.board = None
-
-        self.stats = {"highscore": 0, "history": [], "svalbard": []}
-
         self.saved_boards = [None for i in range(5)]
 
+        self.default_settings = {}
+        self.settings = {}
+        self.stats = {}
+
+        self.init_data()
+
         self.restart_game()
+
+    # prevent crashing when loading an old profile
+    def init_data(self):
+
+        if "width" not in self.default_settings:
+            self.default_settings["width"] = 4
+        if "height" not in self.default_settings:
+            self.default_settings["height"] = 4
+        if "mode" not in self.default_settings:
+            self.default_settings["mode"] = 1
+
+        if "width" not in self.settings:
+            self.settings["width"] = 4
+        if "height" not in self.settings:
+            self.settings["height"] = 4
+        if "mode" not in self.settings:
+            self.settings["mode"] = 1
+        if "animspeed" not in self.settings:
+            self.settings["animspeed"] = 250
+        if "particles" not in self.settings:
+            self.settings["particles"] = True
+
+        if "highscore" not in self.stats:
+            self.stats["highscore"] = 0
+        if "history" not in self.stats:
+            self.stats["history"] = []
+        if "svalbard" not in self.stats:
+            self.stats["svalbard"] = {}
 
     def has_default_settings(self):
         for i in self.default_settings:
@@ -544,15 +572,16 @@ class Profile:
         
         self.stats["history"].append(self.board.score)
 
+        # update highscore
         if self.board.score > self.stats["highscore"]:
             self.stats["highscore"] = self.board.score
 
         # get it because svalbard has the seed vault
         for i in self.board.all_seeds:
             if i not in self.stats["svalbard"]:
-                self.stats["svalbard"].append(i)
-        self.stats["svalbard"].sort()
-
+                self.stats["svalbard"][i] = 1
+            else:
+                self.stats["svalbard"][i] += 1
         self.board = None
 
     def restart_game(self):
@@ -564,7 +593,7 @@ class Profile:
         self.board.setup()
 
     # pickle and save our progress
-    def save(self):
+    def save_to_file(self):
 
         with open(PATH+f"profiles/{self.name}.dive", "wb") as file:
             pickle.dump(self, file)
@@ -737,14 +766,20 @@ def scatter_particles(pos, size, col, life, count, spread_min, spread_max):
         Particle(pos, vel, size, col, life)
 
 def configure_ui(board):
-    global board_pos, seed_pos, score_pos, tile_size, border_size, seed_columns, seed_size, button_size, arrow_size, buttons, settings_buttons, save_buttons, stats_buttons
+    global board_pos, seed_pos, score_pos, tile_size, border_size, seed_columns, seed_size, svalbard_columns, svalbard_rows, svalbard_size, svalbard_pos, button_size, arrow_size, buttons
 
     border_size = int(min(8, DISPLAY_WIDTH/80, DISPLAY_HEIGHT/60))
     tile_size = (min(DISPLAY_WIDTH*0.5, DISPLAY_HEIGHT*0.75)-border_size*(max(board.width, board.height)+1))/max(board.width, board.height)
     seed_columns = 4
     seed_size = (DISPLAY_WIDTH/4-border_size*(seed_columns+3))/seed_columns
+
     button_size = DISPLAY_HEIGHT/8-border_size
     arrow_size = min((DISPLAY_HEIGHT-get_grid_width(tile_size, border_size, max(board.width, board.height))-border_size*3)*0.5, button_size)
+
+    svalbard_columns = int(max((DISPLAY_WIDTH-button_size*2)//(80+border_size), 1))
+    svalbard_rows = int(max((DISPLAY_HEIGHT-button_size*3)//(80+border_size), 1))
+    svalbard_size = (DISPLAY_WIDTH-button_size*2-border_size*(svalbard_columns+1))/svalbard_columns
+    svalbard_pos = (button_size, button_size)
 
     board_pos = pg.Rect((DISPLAY_WIDTH-get_grid_width(tile_size, border_size, max(board.width, board.height)))*0.5, 
                         border_size, 
@@ -761,7 +796,7 @@ def configure_ui(board):
                         button_size,
                         button_size)
     
-    buttons = {
+    buttons = {"": {
         "right": Button((board_pos.centerx+arrow_size*0.5, 
                         board_pos.bottom+border_size+arrow_size, arrow_size, arrow_size),
                         img=button_arrow_off_sprite,
@@ -793,69 +828,73 @@ def configure_ui(board):
         "profile": Button((DISPLAY_WIDTH*0.75+border_size, 
                         get_grid_width(button_size, border_size, 5), min(DISPLAY_WIDTH*0.25-border_size*2, button_size*3), button_size),
                         text="profile"),
-    }
-
-    settings_buttons = {
-        "left_1": Button((0, button_size, button_size, button_size),
+    }, "settings": {
+        "settings_left1": Button((0, button_size, button_size, button_size),
                         img=pg.transform.rotate(button_arrow_off_sprite, 180),
                         hover_img=pg.transform.rotate(button_arrow_on_sprite, 180)),
-        "right_1": Button((DISPLAY_WIDTH-button_size, button_size, button_size, button_size),
+        "settings_right1": Button((DISPLAY_WIDTH-button_size, button_size, button_size, button_size),
                         img=button_arrow_off_sprite,
                         hover_img=button_arrow_on_sprite),
-        "left_2": Button((0, button_size*2, button_size, button_size),
+        "settings_left2": Button((0, button_size*2, button_size, button_size),
                         img=pg.transform.rotate(button_arrow_off_sprite, 180),
                         hover_img=pg.transform.rotate(button_arrow_on_sprite, 180)),
-        "right_2": Button((DISPLAY_WIDTH-button_size, button_size*2, button_size, button_size),
+        "settings_right2": Button((DISPLAY_WIDTH-button_size, button_size*2, button_size, button_size),
                         img=button_arrow_off_sprite,
                         hover_img=button_arrow_on_sprite),
-        "left_3": Button((0, button_size*3, button_size, button_size),
+        "settings_left3": Button((0, button_size*3, button_size, button_size),
                         img=pg.transform.rotate(button_arrow_off_sprite, 180),
                         hover_img=pg.transform.rotate(button_arrow_on_sprite, 180)),
-        "right_3": Button((DISPLAY_WIDTH-button_size, button_size*3, button_size, button_size),
+        "settings_right3": Button((DISPLAY_WIDTH-button_size, button_size*3, button_size, button_size),
                         img=button_arrow_off_sprite,
                         hover_img=button_arrow_on_sprite),
-        "left_4": Button((0, button_size*4, button_size, button_size),
+        "settings_left4": Button((0, button_size*4, button_size, button_size),
                         img=pg.transform.rotate(button_arrow_off_sprite, 180),
                         hover_img=pg.transform.rotate(button_arrow_on_sprite, 180)),
-        "right_4": Button((DISPLAY_WIDTH-button_size, button_size*4, button_size, button_size),
+        "settings_right4": Button((DISPLAY_WIDTH-button_size, button_size*4, button_size, button_size),
                         img=button_arrow_off_sprite,
                         hover_img=button_arrow_on_sprite),
-        "left_5": Button((0, button_size*5, button_size, button_size),
+        "settings_left5": Button((0, button_size*5, button_size, button_size),
                         img=pg.transform.rotate(button_arrow_off_sprite, 180),
                         hover_img=pg.transform.rotate(button_arrow_on_sprite, 180)),
-        "right_5": Button((DISPLAY_WIDTH-button_size, button_size*5, button_size, button_size),
+        "settings_right5": Button((DISPLAY_WIDTH-button_size, button_size*5, button_size, button_size),
                         img=button_arrow_off_sprite,
                         hover_img=button_arrow_on_sprite),
-        "back": Button((button_size, DISPLAY_HEIGHT-button_size*2, DISPLAY_WIDTH-button_size*2, button_size),
+        "back": Button((button_size, DISPLAY_HEIGHT-button_size, DISPLAY_WIDTH-button_size*2, button_size),
                         text="back"),
-        "next_page": Button((button_size, DISPLAY_HEIGHT-button_size*3, DISPLAY_WIDTH-button_size*2, button_size)),
-    }
-
-    save_buttons = {
-        "back": Button((button_size, DISPLAY_HEIGHT-button_size*2, DISPLAY_WIDTH-button_size*2, button_size),
+        "settings_next_page": Button((button_size, DISPLAY_HEIGHT-button_size*2, DISPLAY_WIDTH-button_size*2, button_size)),
+    }, "save": {
+        "back": Button((button_size, DISPLAY_HEIGHT-button_size, DISPLAY_WIDTH-button_size*2, button_size),
                         text="back"),
-        "save": Button((button_size, DISPLAY_HEIGHT-button_size*3, DISPLAY_WIDTH*0.5-button_size, button_size)),
-        "load": Button((DISPLAY_WIDTH*0.5, DISPLAY_HEIGHT-button_size*3, DISPLAY_WIDTH*0.5-button_size, button_size),
+        "save_game": Button((button_size, DISPLAY_HEIGHT-button_size*2, DISPLAY_WIDTH*0.5-button_size, button_size)),
+        "load_game": Button((DISPLAY_WIDTH*0.5, DISPLAY_HEIGHT-button_size*2, DISPLAY_WIDTH*0.5-button_size, button_size),
                         text="load"),
+    }, "stats": {
+        "svalbard": Button((DISPLAY_WIDTH-button_size*2, (button_size+border_size)*3, button_size*2, button_size),
+                        text="svalbard"),
+        "back": Button((button_size, DISPLAY_HEIGHT-button_size, DISPLAY_WIDTH-button_size*2, button_size),
+                        text="back"),
+    }, "profile": {
+        "back": Button((button_size, DISPLAY_HEIGHT-button_size, DISPLAY_WIDTH-button_size*2, button_size),
+                        text="back"),
+        "reset": Button((DISPLAY_WIDTH*0.5, DISPLAY_HEIGHT-button_size*2, DISPLAY_WIDTH*0.5-button_size, button_size),
+                        text="reset"),
+    }, "svalbard": {
+        "svalbard_left": Button((0, button_size, button_size, button_size),
+                        img=pg.transform.rotate(button_arrow_off_sprite, 180),
+                        hover_img=pg.transform.rotate(button_arrow_on_sprite, 180)),
+        "svalbard_right": Button((DISPLAY_WIDTH-button_size, button_size, button_size, button_size),
+                        img=button_arrow_off_sprite,
+                        hover_img=button_arrow_on_sprite),
+        "back": Button((button_size, DISPLAY_HEIGHT-button_size, DISPLAY_WIDTH-button_size*2, button_size),
+                        text="back"),
+    },
     }
+
     for i in range(5):
-        save_buttons[f"slot_{i+1}"] = Button((DISPLAY_WIDTH*0.2*i, 
+        buttons["save"][f"slot_{i+1}"] = Button((DISPLAY_WIDTH*0.2*i, 
                                              button_size,
                                              DISPLAY_WIDTH*0.2, 
                                              button_size*2))
-        
-    stats_buttons = {
-        "left": Button((0, button_size, button_size, button_size),
-                        img=pg.transform.rotate(button_arrow_off_sprite, 180),
-                        hover_img=pg.transform.rotate(button_arrow_on_sprite, 180)),
-        "right": Button((DISPLAY_WIDTH-button_size, button_size, button_size, button_size),
-                        img=button_arrow_off_sprite,
-                        hover_img=button_arrow_on_sprite),
-        "back": Button((button_size, DISPLAY_HEIGHT-button_size*2, DISPLAY_WIDTH-button_size*2, button_size),
-                        text="back"),
-        "reset": Button((DISPLAY_WIDTH*0.5, DISPLAY_HEIGHT-button_size, DISPLAY_WIDTH*0.5-button_size, button_size),
-                        text="reset"),
-    }
         
 def center_text(surf, font, text, col, x, y): # this was getting *so* annoying
     t = font.render(text, 1, col)
@@ -894,11 +933,13 @@ micro_font = pg.font.Font(PATH+"Lato-Regular.ttf", 8)
 profile = load_profile("default")
 if profile == None:
     profile = Profile("default")
+profile.init_data()
 board = profile.get_board()
 configure_ui(board)
 
 last_move = 0
 anim_stage = 0
+page = 0
 just_moved = True
 
 menu = ""
@@ -908,7 +949,7 @@ while game_running:
     
     for event in pg.event.get():
         if event.type == pg.QUIT:
-            profile.save()
+            profile.save_to_file()
             game_running = False
         elif event.type == pg.KEYDOWN:
             if menu == "":
@@ -926,141 +967,154 @@ while game_running:
                     configure_ui(board)
                     just_moved = True
         elif event.type == pg.MOUSEBUTTONDOWN and event.button == 1:
+            
+            active_buttons = buttons[menu]
+            for b in active_buttons:
+                if active_buttons[b].collide(pg.mouse.get_pos()):
 
-            # don't judge this awful button code
-            if menu == "": # main game
-                for b in buttons:
-                    if buttons[b].collide(pg.mouse.get_pos()):
+                    if b in ["right", "down", "left", "up"]:
+                        just_moved = board.move(b)
 
-                        if b in ["right", "down", "left", "up"]:
-                            just_moved = board.move(b)
+                    elif b == "restart":
+                        profile.restart_game()
+                        board = profile.get_board()
+                        configure_ui(board)
+                        just_moved = True
+                        
+                    elif b == "settings":
+                        menu = "settings"
+                        page = 1
+                        buttons["settings"]["settings_next_page"].text = f"page {page}"
 
-                        elif b == "restart":
-                            profile.restart_game()
+                    elif b == "save":
+                        menu = "save"
+                        buttons["save"]["save_game"].text = "save"
+                        save_files = profile.get_saved_boards()
+                        selected_slot = None
+
+                    elif b == "stats":
+                        menu = "stats"    
+                    
+                    elif b == "svalbard":
+                        menu = "svalbard"
+                        page = 1     
+
+                    elif b == "profile":
+                        menu = "profile"
+                        reset_count = 0
+                        buttons["profile"]["reset"].text = RESET_QUIPS[reset_count]
+
+                    elif b == "back":
+                        menu = ""
+
+                    elif b == "settings_next_page":
+                        page += 1
+                        if page > 2:
+                            page = 1
+                        buttons["settings"]["settings_next_page"].text = f"page {page}"
+                    
+                    elif b == "svalbard_left":
+
+                        # move to the previous page that actually has something on it
+                        achieved = profile.stats["svalbard"].keys()
+                        valid_page = False
+                        while page > 1 and not valid_page:
+                            valid_page = False
+                            page -= 1
+                            for i in range(svalbard_columns*svalbard_rows):
+                                if (page-1)*svalbard_columns*svalbard_rows+i in achieved:
+                                    valid_page = True
+                                    break
+                    elif b == "svalbard_right":
+
+                        # move to the next page that actually has something on it
+                        achieved = profile.stats["svalbard"].keys()
+                        if len(achieved) == 0:
+                            highest_page = 1
+                        else:
+                            highest_page = max(achieved)//(svalbard_columns*svalbard_rows)+1
+                        valid_page = False
+                        while page < highest_page and not valid_page:
+                            valid_page = False
+                            page += 1
+                            for i in range(svalbard_columns*svalbard_rows):
+                                if (page-1)*svalbard_columns*svalbard_rows+i in achieved:
+                                    valid_page = True
+                                    break
+
+                    if page == 1:
+                        if b == "settings_left1":
+                            if profile.settings["mode"] > 0:
+                                profile.settings["mode"] -= 1
+                        elif b == "settings_right1":
+                            if profile.settings["mode"] < 3:
+                                profile.settings["mode"] += 1
+                        elif b == "settings_left2":
+                            if profile.settings["width"] > 1:
+                                profile.settings["width"] -= 1
+                        elif b == "settings_right2":
+                            if profile.settings["width"] < 10:
+                                profile.settings["width"] += 1
+                        elif b == "settings_left3":
+                            if profile.settings["height"] > 1:
+                                profile.settings["height"] -= 1
+                        elif b == "settings_right3":
+                            if profile.settings["height"] < 10:
+                                profile.settings["height"] += 1
+
+                    elif page == 2:
+                            
+                        if b == "settings_left1":
+                            if profile.settings["animspeed"] > 0:
+                                profile.settings["animspeed"] -= 50
+                        elif b == "settings_right1":
+                            if profile.settings["animspeed"] < 1000:
+                                profile.settings["animspeed"] += 50
+                        elif b == "settings_left2":
+                            profile.settings["particles"] = False
+                        elif b == "settings_right2":
+                            profile.settings["particles"] = True
+
+                    if b.startswith("slot"):
+
+                        #select the slot
+                        selected_slot = int(b[-1])-1
+
+                        if save_files[selected_slot] == None:
+                            buttons["save"]["save_game"].text = "save"
+                        else:
+                            buttons["save"]["save_game"].text = "overwrite"
+
+                    elif b == "save_game":
+
+                        # save board to the slot
+                        if selected_slot != None:
+
+                            profile.save_board(selected_slot)
+                            menu = ""
+
+                    elif b == "load_game":
+
+                        if selected_slot != None:
+
+                            loaded_board = profile.load_board(selected_slot)
+
+                            if loaded_board != None:
+                                board = loaded_board
+                                configure_ui(board)
+                                just_moved = True
+                                menu = ""
+
+                    if b == "reset":
+                        reset_count += 1
+                        if reset_count >= len(RESET_QUIPS):
+                            profile = Profile("default")
                             board = profile.get_board()
                             configure_ui(board)
+                            menu = ""
                             just_moved = True
-                            
-                        elif b == "settings":
-                            menu = "settings"
-                            settings_page = 1
-                            settings_buttons["next_page"].text = f"page {settings_page}"
-
-                        elif b == "save":
-                            menu = "save"
-                            save_buttons["save"].text = "save"
-                            save_files = profile.get_saved_boards()
-                            selected_slot = None
-
-                        elif b == "stats":
-                            menu = "stats"
-                            stats_page = 1
-                            reset_count = 0
-                            stats_buttons["reset"].text = RESET_QUIPS[reset_count]
-                        
-                        elif b == "profile":
-                            menu = "profile"
-
-            elif menu == "settings": # settings menu
-                for b in settings_buttons:
-                    if settings_buttons[b].collide(pg.mouse.get_pos()):
-                        
-                        if b == "back":
-                            menu = ""
-                        elif b == "next_page":
-                            settings_page += 1
-                            if settings_page > 2:
-                                settings_page = 1
-                            settings_buttons["next_page"].text = f"page {settings_page}"
-
-                        if settings_page == 1:
-                            if b == "left_1":
-                                if profile.settings["mode"] > 0:
-                                    profile.settings["mode"] -= 1
-                            elif b == "right_1":
-                                if profile.settings["mode"] < 3:
-                                    profile.settings["mode"] += 1
-                            elif b == "left_2":
-                                if profile.settings["width"] > 1:
-                                    profile.settings["width"] -= 1
-                            elif b == "right_2":
-                                if profile.settings["width"] < 10:
-                                    profile.settings["width"] += 1
-                            elif b == "left_3":
-                                if profile.settings["height"] > 1:
-                                    profile.settings["height"] -= 1
-                            elif b == "right_3":
-                                if profile.settings["height"] < 10:
-                                    profile.settings["height"] += 1
-
-                        elif settings_page == 2:
-                                
-                            if b == "left_1":
-                                if profile.settings["animspeed"] > 0:
-                                    profile.settings["animspeed"] -= 50
-                            elif b == "right_1":
-                                if profile.settings["animspeed"] < 1000:
-                                    profile.settings["animspeed"] += 50
-                            elif b == "left_2":
-                                profile.settings["particles"] = False
-                            elif b == "right_2":
-                                profile.settings["particles"] = True
-                            
-
-            elif menu == "save": # save/load menu
-                for b in save_buttons:
-                    if save_buttons[b].collide(pg.mouse.get_pos()):
-
-                        if b.startswith("slot"):
-
-                            #select the slot
-                            selected_slot = int(b[-1])-1
-
-                            if save_files[selected_slot] == None:
-                                save_buttons["save"].text = "save"
-                            else:
-                                save_buttons["save"].text = "overwrite"
-
-                        elif b == "save":
-
-                            # save board to the slot
-                            if selected_slot != None:
-
-                                profile.save_board(selected_slot)
-                                menu = ""
-
-                        elif b == "load":
-
-                            if selected_slot != None:
-
-                                loaded_board = profile.load_board(selected_slot)
-
-                                if loaded_board != None:
-                                    board = loaded_board
-                                    configure_ui(board)
-                                    just_moved = True
-                                    menu = ""
-
-                        elif b == "back":
-                            
-                            menu = ""
-
-            elif menu == "stats":
-                for b in stats_buttons:
-                    if stats_buttons[b].collide(pg.mouse.get_pos()):
-
-                        if b == "back":
-                            menu = "" 
-                        elif b == "reset":
-                            reset_count += 1
-                            if reset_count >= len(RESET_QUIPS):
-                                profile = Profile("default")
-                                board = profile.get_board()
-                                configure_ui(board)
-                                menu = ""
-                                just_moved = True
-                            else:
-                                stats_buttons["reset"].text = RESET_QUIPS[reset_count]
+                        else:
+                            buttons["profile"]["reset"].text = RESET_QUIPS[reset_count]
 
             # end of awful button code 
         elif event.type == pg.VIDEORESIZE:
@@ -1101,6 +1155,10 @@ while game_running:
                                     15, get_tile_col(i[0]), 0.4, 12, 150, 150)
 
     main_dis.fill(BG_COL)
+
+    for b in buttons[menu].values():
+        b.display(main_dis, pg.mouse.get_pos())
+
     
     if menu == "": # main game
         board_surf = board.display(tile_size, border_size, anim_timer)
@@ -1113,22 +1171,22 @@ while game_running:
             score_surf = draw_tile(board.anim_score, button_size)
         else:
             score_surf = draw_tile(board.score, button_size)
+        
         main_dis.blit(score_surf, score_pos.topleft)
+        center_text(main_dis, lil_font, "score", WHITE, score_pos.centerx, score_pos.top+border_size)
 
         if anim_timer < 0.5:
             high_score_surf = draw_tile(max(board.anim_score, profile.stats["highscore"]), button_size)
         else:
             high_score_surf = draw_tile(max(board.score, profile.stats["highscore"]), button_size)
         main_dis.blit(high_score_surf, (score_pos.right+border_size, score_pos.top))
-
-        for b in buttons:
-            buttons[b].display(main_dis, pg.mouse.get_pos())
+        center_text(main_dis, lil_font, "best", WHITE, score_pos.centerx+score_pos.width+border_size, score_pos.top+border_size)
 
         display_particles(main_dis)
 
     elif menu == "settings": # settings menu
 
-        if settings_page == 1:
+        if page == 1:
             center_text(main_dis, huge_font, "game settings (apply to new games only)", BLACK, DISPLAY_WIDTH*0.5, button_size*0.5)
             
             center_text(main_dis, huge_font, f"gamemode: {GAMEMODE_DESCRIPTIONS[profile.settings["mode"]]}", BLACK, DISPLAY_WIDTH*0.5, button_size*1.5)
@@ -1136,22 +1194,16 @@ while game_running:
             center_text(main_dis, huge_font, f"height: {profile.settings["height"]}", BLACK, DISPLAY_WIDTH*0.5, button_size*3.5)
 
             if not profile.has_default_settings():
-                center_text(main_dis, huge_font, f"note: stats disabled", BLACK, DISPLAY_WIDTH*0.5, DISPLAY_HEIGHT-button_size*0.5)
+                center_text(main_dis, huge_font, f"note: stats disabled", BLACK, DISPLAY_WIDTH*0.5, DISPLAY_HEIGHT-button_size*2.5)
 
-        elif settings_page == 2:
+        elif page == 2:
             center_text(main_dis, huge_font, "visual settings", BLACK, DISPLAY_WIDTH*0.5, button_size*0.5)
             
             center_text(main_dis, huge_font, f"anim speed: {profile.settings["animspeed"]}ms", BLACK, DISPLAY_WIDTH*0.5, button_size*1.5)
             center_text(main_dis, huge_font, f"particles: {"on" if profile.settings["particles"] else "off"}", BLACK, DISPLAY_WIDTH*0.5, button_size*2.5)
 
-        for b in settings_buttons:
-            settings_buttons[b].display(main_dis, pg.mouse.get_pos())
-
     elif menu == "save": # save/load menu
         center_text(main_dis, huge_font, "save/load", BLACK, DISPLAY_WIDTH*0.5, button_size*0.5)
-
-        for b in save_buttons:
-            save_buttons[b].display(main_dis, pg.mouse.get_pos())
 
         for i in range(5):
             if selected_slot == i:
@@ -1162,23 +1214,44 @@ while game_running:
                 s = draw_tile(save_files[i].score, button_size)
                 main_dis.blit(s, (DISPLAY_WIDTH*0.2*(i+0.5)-s.get_width()*0.5, button_size*2-s.get_height()*0.5))
                 center_text(main_dis, lil_font, GAMEMODE_DESCRIPTIONS[save_files[i].mode], BLACK, DISPLAY_WIDTH*0.2*(i+0.5), button_size*2.7)
-        center_text(main_dis, huge_font, f"note: loaded games have stats disabled", BLACK, DISPLAY_WIDTH*0.5, DISPLAY_HEIGHT-button_size*0.5)
+        center_text(main_dis, huge_font, f"note: loaded games have stats disabled", BLACK, DISPLAY_WIDTH*0.5, DISPLAY_HEIGHT-button_size*2.5)
     
     elif menu == "stats":
         center_text(main_dis, huge_font, "stats", BLACK, DISPLAY_WIDTH*0.5, button_size*0.5)
 
         stat_labels = [("games played:", len(profile.stats["history"])),
                        ("high score:", profile.stats["highscore"]),
-                       ("unique seeds discovered:", len(profile.stats["svalbard"])),
-                       ("highest seed discovered:", 0 if len(profile.stats["svalbard"]) == 0 else profile.stats["svalbard"][-1])]
+                       ("unique seeds discovered:", len(profile.stats["svalbard"].keys())),
+                       ("highest seed discovered:", 0 if len(profile.stats["svalbard"]) == 0 else max(profile.stats["svalbard"].keys()))]
         for i, j in enumerate(stat_labels):
             text = huge_font.render(j[0], 1, BLACK)
             main_dis.blit(text, (button_size*2+border_size, (button_size+border_size)*(1.5+i)-text.get_height()*0.5))
             main_dis.blit(draw_tile((j[1]), button_size), (button_size*2+text.get_width()+border_size*2, (button_size+border_size)*(1+i)))
         #center_text(main_dis, huge_font, f"games played: {len(profile.stats["history"])}", BLACK, DISPLAY_WIDTH*0.25, button_size*1.5)
+    
+    elif menu == "svalbard":
+        center_text(main_dis, huge_font, f"svalbard (page {page})", BLACK, DISPLAY_WIDTH*0.5, button_size*0.5)
 
-        for b in stats_buttons:
-            stats_buttons[b].display(main_dis, pg.mouse.get_pos())
+        start_index = (page-1)*svalbard_columns*svalbard_rows
+        achieved = profile.stats["svalbard"].keys()
+        for i in range(svalbard_rows):
+            for j in range(svalbard_columns):
+                svalbard_tile = start_index+i*svalbard_columns+j
+                if svalbard_tile < 2:
+                    continue
+                t = draw_tile(svalbard_tile, svalbard_size)
+                if svalbard_tile not in achieved:
+                    t.set_alpha(63)
+
+                pos = (get_grid_width(svalbard_size, border_size, j)+svalbard_pos[0], get_grid_width(svalbard_size, border_size, i)+svalbard_pos[1])
+                main_dis.blit(t, pos)
+                if pg.Rect(pos, (svalbard_size, svalbard_size)).collidepoint(pg.mouse.get_pos()):
+                    times = 0 if svalbard_tile not in achieved else profile.stats["svalbard"][svalbard_tile]
+                    center_text(main_dis, huge_font, f"unlocked this seed in {times} game{"" if times == 1 else "s"}", BLACK, DISPLAY_WIDTH*0.5, DISPLAY_HEIGHT-button_size*1.5)
+
+
+    elif menu == "profile":
+        center_text(main_dis, huge_font, "profile", BLACK, DISPLAY_WIDTH*0.5, button_size*0.5)
 
     pg.display.flip()
 
