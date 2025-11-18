@@ -1140,11 +1140,13 @@ while game_running:
                     
                     if page == 1:
                         if b == "settings_left1":
-                            if profile.settings["mode"] > 0:
-                                profile.settings["mode"] -= 1
+                            profile.settings["mode"] -= 1
+                            if profile.settings["mode"] < 0:
+                                profile.settings["mode"] = 3
                         elif b == "settings_right1":
-                            if profile.settings["mode"] < 3:
-                                profile.settings["mode"] += 1
+                            profile.settings["mode"] += 1
+                            if profile.settings["mode"] > 3:
+                                profile.settings["mode"] = 0
                         elif b == "settings_left2":
                             if profile.settings["width"] > 1:
                                 profile.settings["width"] -= 1
@@ -1167,9 +1169,9 @@ while game_running:
                             if profile.settings["animspeed"] < 1000:
                                 profile.settings["animspeed"] += 50
                         elif b == "settings_left2":
-                            profile.settings["particles"] = False
+                            profile.settings["particles"] = not profile.settings["particles"]
                         elif b == "settings_right2":
-                            profile.settings["particles"] = True
+                            profile.settings["particles"] = not profile.settings["particles"]
 
             # end of awful button code 
         elif event.type == pg.VIDEORESIZE:
