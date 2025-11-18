@@ -1301,7 +1301,6 @@ while game_running:
                 pos = (get_grid_width(svalbard_size, border_size, j)+svalbard_pos[0], get_grid_width(svalbard_size, border_size, i)+svalbard_pos[1])
                 main_dis.blit(t, pos)
                 if pg.Rect(pos, (svalbard_size, svalbard_size)).collidepoint(pg.mouse.get_pos()):
-                    main_dis.blit(pg.transform.scale(get_tile_sprite(11), (svalbard_size, svalbard_size)), pos)
                     times = 0 if svalbard_tile not in achieved else profile.stats["svalbard"][svalbard_tile]
                     center_text(main_dis, huge_font, f"unlocked this seed in {times} game{"" if times == 1 else "s"}", BLACK, DISPLAY_WIDTH*0.5, DISPLAY_HEIGHT-button_size*1.5)
 
