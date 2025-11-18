@@ -6,7 +6,7 @@ import pickle
 
 DISPLAY_SIZE = (1080, 720)
 DISPLAY_WIDTH, DISPLAY_HEIGHT = DISPLAY_SIZE
-fps = 60
+FPS = 60
 
 # keybinds, change these if you want
 KEYBINDS = {"up": {pg.K_w, pg.K_UP}, 
@@ -32,9 +32,12 @@ PRIMES = [7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47,
     131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197,
     199, 211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277,
     281, 283, 293, 307, 311, 313, 317, 331, 337, 347, 349, 353, 359, 367]
+TYPABLE_CHARS = ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z',
+                 'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
+                 '0','1','2','3','4','5','6','7','8','9','_']
+TYPABLE_NUMS = ['0','1','2','3','4','5','6','7','8','9',]
 
 GAMEMODE_DESCRIPTIONS = ["pydive (in development)", "classic dive", "permanent seeds", "2, 3, 5, 7 only"]
-RESET_QUIPS = ["reset profile", "are you sure?", "you'll lose everything.", "there's no going back."] + [f"click {i} time{"s" if i!=1 else ""} to reset" for i in range(5, 0, -1)]
 
 class Board:
     
@@ -765,7 +768,9 @@ def scatter_particles(pos, size, col, life, count, spread_min, spread_max):
         vel = Vector2(random.uniform(spread_min, spread_max), 0).rotate(i*360.0/count)
         Particle(pos, vel, size, col, life)
 
-def configure_ui(board):
+def configure_ui(profile):
+
+    board = profile.get_board()
     global board_pos, seed_pos, score_pos, tile_size, border_size, seed_columns, seed_size, svalbard_columns, svalbard_rows, svalbard_size, svalbard_pos, button_size, arrow_size, buttons
 
     border_size = int(min(8, DISPLAY_WIDTH/80, DISPLAY_HEIGHT/60))
@@ -827,7 +832,10 @@ def configure_ui(board):
                         text="stats"),
         "profile": Button((DISPLAY_WIDTH*0.75+border_size, 
                         get_grid_width(button_size, border_size, 5), min(DISPLAY_WIDTH*0.25-border_size*2, button_size*3), button_size),
-                        text="profile"),
+                        text="[no profile]" if profile.name == "" else f"{profile.name}.dive"),
+        "exit": Button((DISPLAY_WIDTH*0.75+border_size, 
+                        get_grid_width(button_size, border_size, 6), min(DISPLAY_WIDTH*0.25-border_size*2, button_size*3), button_size),
+                        text="exit"),
     }, "settings": {
         "settings_left1": Button((0, button_size, button_size, button_size),
                         img=pg.transform.rotate(button_arrow_off_sprite, 180),
@@ -876,8 +884,8 @@ def configure_ui(board):
     }, "profile": {
         "back": Button((button_size, DISPLAY_HEIGHT-button_size, DISPLAY_WIDTH-button_size*2, button_size),
                         text="back"),
-        "reset": Button((DISPLAY_WIDTH*0.5, DISPLAY_HEIGHT-button_size*2, DISPLAY_WIDTH*0.5-button_size, button_size),
-                        text="reset"),
+        "login": Button((button_size, DISPLAY_HEIGHT-button_size*2, DISPLAY_WIDTH-button_size*2, button_size),
+                        "create profile" if profile.name == "" else "save and logout"),
     }, "svalbard": {
         "svalbard_left": Button((0, button_size, button_size, button_size),
                         img=pg.transform.rotate(button_arrow_off_sprite, 180),
@@ -930,12 +938,10 @@ lil_font = pg.font.Font(PATH+"Lato-Regular.ttf", 18)
 mini_font = pg.font.Font(PATH+"Lato-Regular.ttf", 12)
 micro_font = pg.font.Font(PATH+"Lato-Regular.ttf", 8)
 
-profile = load_profile("default")
-if profile == None:
-    profile = Profile("default")
+profile = Profile("")
 profile.init_data()
 board = profile.get_board()
-configure_ui(board)
+configure_ui(profile)
 
 last_move = 0
 anim_stage = 0
@@ -949,7 +955,8 @@ while game_running:
     
     for event in pg.event.get():
         if event.type == pg.QUIT:
-            profile.save_to_file()
+            if profile.name != "":
+                profile.save_to_file()
             game_running = False
         elif event.type == pg.KEYDOWN:
             if menu == "":
@@ -964,8 +971,21 @@ while game_running:
                 elif event.key in KEYBINDS["restart"]:
                     profile.restart_game()
                     board = profile.get_board()
-                    configure_ui(board)
+                    configure_ui(profile)
                     just_moved = True
+            elif menu == "profile" and profile.name == "":
+                if event.unicode in TYPABLE_CHARS:
+                    entered_name = entered_name + event.unicode
+                elif event.key == pg.K_BACKSPACE:
+                    if len(entered_name) != 0:
+                        entered_name = entered_name[:-1]
+                if len(entered_name) != 0:
+                    check_profile = load_profile(entered_name)
+                    if check_profile == None:
+                        buttons["profile"]["login"].text = "create profile"
+                    else:
+                        buttons["profile"]["login"].text = "load profile"
+                
         elif event.type == pg.MOUSEBUTTONDOWN and event.button == 1:
             
             active_buttons = buttons[menu]
@@ -978,7 +998,7 @@ while game_running:
                     elif b == "restart":
                         profile.restart_game()
                         board = profile.get_board()
-                        configure_ui(board)
+                        configure_ui(profile)
                         just_moved = True
                         
                     elif b == "settings":
@@ -1001,11 +1021,20 @@ while game_running:
 
                     elif b == "profile":
                         menu = "profile"
-                        reset_count = 0
-                        buttons["profile"]["reset"].text = RESET_QUIPS[reset_count]
+                        if profile.name == "":
+                            buttons["profile"]["login"].text = "create profile"
+                        else:
+                            buttons["profile"]["login"].text = "save and logout"
+                        entered_name = ""
+                        check_profile = None
 
                     elif b == "back":
                         menu = ""
+
+                    elif b == "exit":
+                        if profile.name != "":
+                            profile.save_to_file()
+                        game_running = False
 
                     elif b == "settings_next_page":
                         page += 1
@@ -1025,6 +1054,7 @@ while game_running:
                                 if (page-1)*svalbard_columns*svalbard_rows+i in achieved:
                                     valid_page = True
                                     break
+                    
                     elif b == "svalbard_right":
 
                         # move to the next page that actually has something on it
@@ -1042,6 +1072,72 @@ while game_running:
                                     valid_page = True
                                     break
 
+                    if b.startswith("slot"):
+
+                        #select the slot
+                        selected_slot = int(b[-1])-1
+
+                        if save_files[selected_slot] == None:
+                            buttons["save"]["save_game"].text = "save"
+                        else:
+                            buttons["save"]["save_game"].text = "overwrite"
+
+                    elif b == "save_game":
+
+                        # save board to the slot
+                        if selected_slot != None:
+
+                            profile.save_board(selected_slot)
+                            menu = ""
+
+                    elif b == "load_game":
+
+                        if selected_slot != None:
+
+                            loaded_board = profile.load_board(selected_slot)
+
+                            if loaded_board != None:
+                                board = loaded_board
+                                configure_ui(profile)
+                                just_moved = True
+                                menu = ""
+
+                    elif b == "login":
+                        if profile.name == "":
+                            if check_profile == None and entered_name != "":
+
+                                # create a profile
+                                profile.name = entered_name
+                                profile.init_data()
+                                board = profile.get_board()
+                                configure_ui(profile)
+                                menu = ""
+                                just_moved = True
+                                buttons[""]["profile"].text = profile.name+".dive"
+
+                            elif check_profile != None:
+                                
+                                # load existing profile
+                                profile = check_profile
+                                check_profile = None
+                                profile.init_data()
+                                board = profile.get_board()
+                                configure_ui(profile)
+                                menu = ""
+                                just_moved = True
+                                buttons[""]["profile"].text = profile.name+".dive"
+                                
+                        else:
+
+                            profile.save_to_file()
+                            profile = Profile("")
+                            profile.init_data()
+                            board = profile.get_board()
+                            configure_ui(profile)
+                            menu = ""
+                            just_moved = True
+                            buttons[""]["profile"].text = "[no profile]"
+                    
                     if page == 1:
                         if b == "settings_left1":
                             if profile.settings["mode"] > 0:
@@ -1075,64 +1171,23 @@ while game_running:
                         elif b == "settings_right2":
                             profile.settings["particles"] = True
 
-                    if b.startswith("slot"):
-
-                        #select the slot
-                        selected_slot = int(b[-1])-1
-
-                        if save_files[selected_slot] == None:
-                            buttons["save"]["save_game"].text = "save"
-                        else:
-                            buttons["save"]["save_game"].text = "overwrite"
-
-                    elif b == "save_game":
-
-                        # save board to the slot
-                        if selected_slot != None:
-
-                            profile.save_board(selected_slot)
-                            menu = ""
-
-                    elif b == "load_game":
-
-                        if selected_slot != None:
-
-                            loaded_board = profile.load_board(selected_slot)
-
-                            if loaded_board != None:
-                                board = loaded_board
-                                configure_ui(board)
-                                just_moved = True
-                                menu = ""
-
-                    if b == "reset":
-                        reset_count += 1
-                        if reset_count >= len(RESET_QUIPS):
-                            profile = Profile("default")
-                            board = profile.get_board()
-                            configure_ui(board)
-                            menu = ""
-                            just_moved = True
-                        else:
-                            buttons["profile"]["reset"].text = RESET_QUIPS[reset_count]
-
             # end of awful button code 
         elif event.type == pg.VIDEORESIZE:
             DISPLAY_SIZE = (main_dis.get_width(), main_dis.get_height())
             DISPLAY_WIDTH, DISPLAY_HEIGHT = DISPLAY_SIZE
-            configure_ui(board)
+            configure_ui(profile)
 
         #elif event.type == pg.MOUSEMOTION:
         #    DISPLAY_SIZE = pg.mouse.get_pos()
         #    DISPLAY_WIDTH, DISPLAY_HEIGHT = DISPLAY_SIZE
-        #    configure_ui(board)
+        #    configure_ui(profile)
     
     if just_moved:
         last_move = pg.time.get_ticks()
         anim_stage = 0
         just_moved = False
 
-    tdelta = clock.tick()
+    tdelta = clock.tick(FPS)
     update_particles(tdelta)
     
     if profile.settings["animspeed"] > 0:
@@ -1246,12 +1301,24 @@ while game_running:
                 pos = (get_grid_width(svalbard_size, border_size, j)+svalbard_pos[0], get_grid_width(svalbard_size, border_size, i)+svalbard_pos[1])
                 main_dis.blit(t, pos)
                 if pg.Rect(pos, (svalbard_size, svalbard_size)).collidepoint(pg.mouse.get_pos()):
+                    main_dis.blit(pg.transform.scale(get_tile_sprite(11), (svalbard_size, svalbard_size)), pos)
                     times = 0 if svalbard_tile not in achieved else profile.stats["svalbard"][svalbard_tile]
                     center_text(main_dis, huge_font, f"unlocked this seed in {times} game{"" if times == 1 else "s"}", BLACK, DISPLAY_WIDTH*0.5, DISPLAY_HEIGHT-button_size*1.5)
 
 
     elif menu == "profile":
         center_text(main_dis, huge_font, "profile", BLACK, DISPLAY_WIDTH*0.5, button_size*0.5)
+        if profile.name == "":
+            center_text(main_dis, huge_font, "no profile loaded. type a profile name to create or load one.", BLACK, DISPLAY_WIDTH*0.5, button_size*1.5)
+            center_text(main_dis, huge_font, f"profile name: {entered_name}.dive", BLACK, DISPLAY_WIDTH*0.5, button_size*2.5)
+            if len(entered_name) > 0:
+                if check_profile == None:
+                    center_text(main_dis, huge_font, f"no profile with that name found. create one?", BLACK, DISPLAY_WIDTH*0.5, button_size*3.5)
+                else:
+                    center_text(main_dis, huge_font, f"profile {check_profile.name}.dive found.", BLACK, DISPLAY_WIDTH*0.5, button_size*3.5)
+                    high_score_surf = draw_tile(max(board.anim_score, check_profile.stats["highscore"]), button_size)
+        else:
+            center_text(main_dis, huge_font, f"current profile: {profile.name}", BLACK, DISPLAY_WIDTH*0.5, button_size*1.5)
 
     pg.display.flip()
 
