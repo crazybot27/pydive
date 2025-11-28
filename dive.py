@@ -4,6 +4,8 @@ import random
 import math
 import pickle
 
+VERSION = "0.1.0"
+
 DISPLAY_SIZE = (1080, 720)
 DISPLAY_WIDTH, DISPLAY_HEIGHT = DISPLAY_SIZE
 FPS = 60
@@ -340,7 +342,10 @@ class Board:
                         get_grid_width(seed_size, border, rows+1)), pg.SRCALPHA)
         
         s.fill(FG_COL)
-        center_text(s, big_font, "seeds:", BLACK, s.get_width()*0.5, seed_size*0.5+border_size)
+        if self.game_over and anim_timer >= 1.0:
+            center_text(s, big_font, "all seeds:", BLACK, s.get_width()*0.5, seed_size*0.5+border_size)
+        else:
+            center_text(s, big_font, "seeds:", BLACK, s.get_width()*0.5, seed_size*0.5+border_size)
 
         if anim_timer < 0.5:
             for seed in self.anim_seeds:
@@ -768,6 +773,7 @@ def scatter_particles(pos, size, col, life, count, spread_min, spread_max):
         vel = Vector2(random.uniform(spread_min, spread_max), 0).rotate(i*360.0/count)
         Particle(pos, vel, size, col, life)
 
+# do not look at this function unless you want to lose your mind.
 def configure_ui(profile):
 
     board = profile.get_board()
@@ -794,7 +800,7 @@ def configure_ui(profile):
     seed_pos =  pg.Rect(board_pos.left-get_grid_width(seed_size, border_size, seed_columns)-border_size, 
                         border_size, 
                         get_grid_width(seed_size, border_size, seed_columns), 
-                        get_grid_width(seed_size, border_size, 10))
+                        DISPLAY_HEIGHT-button_size-3*border_size)
   
     score_pos = pg.Rect(DISPLAY_WIDTH*0.75+border_size*2, 
                         border_size, 
@@ -818,6 +824,14 @@ def configure_ui(profile):
                         board_pos.bottom+border_size, arrow_size, arrow_size),
                         img=pg.transform.rotate(button_arrow_off_sprite, 90),
                         hover_img=pg.transform.rotate(button_arrow_on_sprite, 90)),
+        "seed_up": Button((seed_pos.left, 
+                        DISPLAY_HEIGHT-arrow_size-border_size, arrow_size, arrow_size),
+                        img=pg.transform.rotate(button_arrow_off_sprite, 90),
+                        hover_img=pg.transform.rotate(button_arrow_on_sprite, 90)),
+        "seed_down": Button((seed_pos.right-arrow_size, 
+                        DISPLAY_HEIGHT-arrow_size-border_size, arrow_size, arrow_size),
+                        img=pg.transform.rotate(button_arrow_off_sprite, 270),
+                        hover_img=pg.transform.rotate(button_arrow_on_sprite, 270)),
         "settings": Button((DISPLAY_WIDTH*0.75+border_size, 
                         get_grid_width(button_size, border_size, 1), min(DISPLAY_WIDTH*0.25-border_size*2, button_size*3), button_size),
                         text="settings"),
@@ -837,36 +851,6 @@ def configure_ui(profile):
                         get_grid_width(button_size, border_size, 6), min(DISPLAY_WIDTH*0.25-border_size*2, button_size*3), button_size),
                         text="exit"),
     }, "settings": {
-        "settings_left1": Button((0, button_size, button_size, button_size),
-                        img=pg.transform.rotate(button_arrow_off_sprite, 180),
-                        hover_img=pg.transform.rotate(button_arrow_on_sprite, 180)),
-        "settings_right1": Button((DISPLAY_WIDTH-button_size, button_size, button_size, button_size),
-                        img=button_arrow_off_sprite,
-                        hover_img=button_arrow_on_sprite),
-        "settings_left2": Button((0, button_size*2, button_size, button_size),
-                        img=pg.transform.rotate(button_arrow_off_sprite, 180),
-                        hover_img=pg.transform.rotate(button_arrow_on_sprite, 180)),
-        "settings_right2": Button((DISPLAY_WIDTH-button_size, button_size*2, button_size, button_size),
-                        img=button_arrow_off_sprite,
-                        hover_img=button_arrow_on_sprite),
-        "settings_left3": Button((0, button_size*3, button_size, button_size),
-                        img=pg.transform.rotate(button_arrow_off_sprite, 180),
-                        hover_img=pg.transform.rotate(button_arrow_on_sprite, 180)),
-        "settings_right3": Button((DISPLAY_WIDTH-button_size, button_size*3, button_size, button_size),
-                        img=button_arrow_off_sprite,
-                        hover_img=button_arrow_on_sprite),
-        "settings_left4": Button((0, button_size*4, button_size, button_size),
-                        img=pg.transform.rotate(button_arrow_off_sprite, 180),
-                        hover_img=pg.transform.rotate(button_arrow_on_sprite, 180)),
-        "settings_right4": Button((DISPLAY_WIDTH-button_size, button_size*4, button_size, button_size),
-                        img=button_arrow_off_sprite,
-                        hover_img=button_arrow_on_sprite),
-        "settings_left5": Button((0, button_size*5, button_size, button_size),
-                        img=pg.transform.rotate(button_arrow_off_sprite, 180),
-                        hover_img=pg.transform.rotate(button_arrow_on_sprite, 180)),
-        "settings_right5": Button((DISPLAY_WIDTH-button_size, button_size*5, button_size, button_size),
-                        img=button_arrow_off_sprite,
-                        hover_img=button_arrow_on_sprite),
         "back": Button((button_size, DISPLAY_HEIGHT-button_size, DISPLAY_WIDTH-button_size*2, button_size),
                         text="back"),
         "settings_next_page": Button((button_size, DISPLAY_HEIGHT-button_size*2, DISPLAY_WIDTH-button_size*2, button_size)),
@@ -897,6 +881,10 @@ def configure_ui(profile):
                         text="back"),
     },
     }
+
+    for i in range(5):
+        buttons["settings"][f"settings_left{i+1}"] = Button((border_size, button_size*(i+1), button_size, button_size), img=pg.transform.rotate(button_arrow_off_sprite, 180), hover_img=pg.transform.rotate(button_arrow_on_sprite, 180))
+        buttons["settings"][f"settings_right{i+1}"] = Button((DISPLAY_WIDTH-button_size-border_size, button_size*(i+1), button_size, button_size), img=button_arrow_off_sprite, hover_img=button_arrow_on_sprite)
 
     for i in range(5):
         buttons["save"][f"slot_{i+1}"] = Button((DISPLAY_WIDTH*0.2*i, 
@@ -949,7 +937,6 @@ page = 0
 just_moved = True
 
 menu = ""
-
 game_running = True
 while game_running:
     
@@ -994,6 +981,12 @@ while game_running:
 
                     if b in ["right", "down", "left", "up"]:
                         just_moved = board.move(b)
+
+                    elif b == "seed_down":
+                        seed_pos.y -= seed_size
+                    elif b == "seed_up":
+                        if seed_pos.y < border_size:
+                            seed_pos.y += seed_size
 
                     elif b == "restart":
                         profile.restart_game()
@@ -1139,6 +1132,7 @@ while game_running:
                             buttons[""]["profile"].text = "[no profile]"
                     
                     if page == 1:
+                        
                         if b == "settings_left1":
                             profile.settings["mode"] -= 1
                             if profile.settings["mode"] < 0:
@@ -1190,6 +1184,7 @@ while game_running:
         just_moved = False
 
     tdelta = clock.tick(FPS)
+
     update_particles(tdelta)
     
     if profile.settings["animspeed"] > 0:
@@ -1284,6 +1279,8 @@ while game_running:
             text = huge_font.render(j[0], 1, BLACK)
             main_dis.blit(text, (button_size*2+border_size, (button_size+border_size)*(1.5+i)-text.get_height()*0.5))
             main_dis.blit(draw_tile((j[1]), button_size), (button_size*2+text.get_width()+border_size*2, (button_size+border_size)*(1+i)))
+
+        center_text(main_dis, huge_font, f"note: current game is not included in stats", BLACK, DISPLAY_WIDTH*0.5, DISPLAY_HEIGHT-button_size*2.5)
         #center_text(main_dis, huge_font, f"games played: {len(profile.stats["history"])}", BLACK, DISPLAY_WIDTH*0.25, button_size*1.5)
     
     elif menu == "svalbard":
@@ -1320,6 +1317,9 @@ while game_running:
                     high_score_surf = draw_tile(max(board.anim_score, check_profile.stats["highscore"]), button_size)
         else:
             center_text(main_dis, huge_font, f"current profile: {profile.name}", BLACK, DISPLAY_WIDTH*0.5, button_size*1.5)
+
+    version_text = lil_font.render(VERSION, 1, BLACK)
+    main_dis.blit(version_text, (DISPLAY_WIDTH-version_text.get_width()-border_size, DISPLAY_HEIGHT-version_text.get_height()-border_size))
 
     pg.display.flip()
 
