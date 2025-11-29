@@ -3,6 +3,7 @@ from pygame.math import Vector2
 import random
 import math
 import pickle
+from copy import deepcopy
 
 VERSION = "0.1.0"
 
@@ -16,6 +17,7 @@ KEYBINDS = {"up": {pg.K_w, pg.K_UP},
             "down": {pg.K_s, pg.K_DOWN}, 
             "right": {pg.K_d, pg.K_RIGHT},
             "restart": {pg.K_y},
+            "preview": {pg.K_LSHIFT, pg.K_RSHIFT}
             }
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -69,6 +71,8 @@ class Board:
 
         self.score = 0
         self.anim_score = 0
+
+        self.preview_board = None
 
         # savescum prevention
         self.tainted = False
@@ -261,9 +265,17 @@ class Board:
 
         return new_tiles if move_worked else None
     
+    def preview_move(self, direction):
+
+        self.preview_board = Board(self.width, self.height, self.mode)
+        self.preview_board.tiles = [[i for i in j] for j in self.tiles]
+        self.preview_board.seeds = [i for i in self.seeds]
+
+        self.preview_board.move(direction, preview=True)
+
     # perform one full move of the game
     # returns whether or not the move was successful
-    def move(self, direction):
+    def move(self, direction, preview=False):
 
         if self.game_over:
             return False
@@ -321,15 +333,19 @@ class Board:
             self.anim_seeds = [(seed, i, i) for i, seed in enumerate(self.seeds)]
 
         # spawn a new tile
-        self.spawn_tiles(1)
+        if not preview:
+            self.spawn_tiles(1)
 
-        self.check_for_game_over()
-        if self.game_over:
-            self.all_seeds.sort()
-        
+            self.check_for_game_over()
+            if self.game_over:
+                self.all_seeds.sort()
+            
         return True
     
-    def display_seed_list(self, seed_size, border, columns, scroll, anim_timer):
+    def display_seed_list(self, seed_size, border, columns, anim_timer, preview=False):
+
+        if preview:
+            return self.preview_board.display_seed_list(seed_size, border, columns, 1.0)
 
         if anim_timer < 1.0:
             rows = math.ceil(max(len([1 for x in self.anim_seeds if x[1] != None]),len([1 for x in self.anim_seeds if x[2] != None]))/float(columns))
@@ -401,7 +417,11 @@ class Board:
         
         return s
     
-    def display(self, tile_size, border, anim_timer):
+    def display(self, tile_size, border, anim_timer, preview=False):
+
+        if preview:
+            s = self.preview_board.display(tile_size, border, 1.0)
+            return s
 
         s = pg.Surface((get_grid_width(tile_size, border, self.width), 
                         get_grid_width(tile_size, border, self.height)), pg.SRCALPHA)
@@ -559,13 +579,16 @@ class Profile:
             self.default_settings["height"] = 4
         if "mode" not in self.default_settings:
             self.default_settings["mode"] = 1
-
+        if "preview" in self.default_settings:
+            self.default_settings.pop("preview")
         if "width" not in self.settings:
             self.settings["width"] = 4
         if "height" not in self.settings:
             self.settings["height"] = 4
         if "mode" not in self.settings:
             self.settings["mode"] = 1
+        if "preview" not in self.settings:
+            self.settings["preview"] = False
         if "animspeed" not in self.settings:
             self.settings["animspeed"] = 250
         if "particles" not in self.settings:
@@ -628,7 +651,7 @@ class Profile:
 
         with open(PATH+f"profiles/{self.name}.dive", "wb") as file:
             pickle.dump(self, file)
-        with open(PATH+"lastopen.txt", "w") as file:
+        with open(PATH+"profiles/lastopen.txt", "w") as file:
             file.write(self.name)
 
     # save board to our saved boards
@@ -725,7 +748,7 @@ def draw_tile(tile, size):
         return
     
     # pick a font size to fit the tile
-    if len(str(tile)) < size*0.04:
+    if len(str(tile)) < size*0.05:
         font = huge_font
         shadow_size = 2
     elif len(str(tile)) < size*0.07:
@@ -952,7 +975,7 @@ mini_font = pg.font.Font(PATH+"Lato-Regular.ttf", 12)
 micro_font = pg.font.Font(PATH+"Lato-Regular.ttf", 8)
 
 try:
-    with open(PATH+"lastopen.txt") as file:
+    with open(PATH+"profiles/lastopen.txt") as file:
         profile = load_profile(file.read())
         if profile == None:
             profile = Profile("")
@@ -968,6 +991,9 @@ anim_stage = 0
 page = 0
 just_moved = True
 
+preview_held = False
+previewing_move = False
+
 menu = ""
 game_running = True
 while game_running:
@@ -977,24 +1003,42 @@ while game_running:
             if profile.name != "":
                 profile.save_to_file()
             else:
-                with open(PATH+"lastopen.txt", "w") as file:
+                with open(PATH+"profiles/lastopen.txt", "w") as file:
                     file.write("")
             game_running = False
         elif event.type == pg.KEYDOWN:
             if menu == "":
                 if event.key in KEYBINDS["right"]:
-                    just_moved = board.move("right")
+                    if preview_held:
+                        board.preview_move("right")
+                        previewing_move = True
+                    else:
+                        just_moved = board.move("right")
                 elif event.key in KEYBINDS["down"]:
-                    just_moved = board.move("down")
+                    if preview_held:
+                        board.preview_move("down")
+                        previewing_move = True
+                    else:
+                            just_moved = board.move("down")
                 elif event.key in KEYBINDS["left"]:
-                    just_moved = board.move("left")
+                    if preview_held:
+                        board.preview_move("left")
+                        previewing_move = True
+                    else:
+                        just_moved = board.move("left")
                 elif event.key in KEYBINDS["up"]:
-                    just_moved = board.move("up")
+                    if preview_held:
+                        board.preview_move("up")
+                        previewing_move = True
+                    else:
+                        just_moved = board.move("up")
                 elif event.key in KEYBINDS["restart"]:
                     profile.restart_game()
                     board = profile.get_board()
                     configure_ui(profile)
                     just_moved = True
+                elif event.key in KEYBINDS["preview"] and profile.settings["preview"]:
+                    preview_held = True
             elif menu == "profile" and profile.name == "":
                 if event.unicode in TYPABLE_CHARS:
                     entered_name = entered_name + event.unicode
@@ -1007,7 +1051,12 @@ while game_running:
                         buttons["profile"]["login"].update_text("create profile")
                     else:
                         buttons["profile"]["login"].update_text("load profile")
-                
+        elif event.type == pg.KEYUP:
+            if menu == "":
+                if event.key in KEYBINDS["right"] or event.key in KEYBINDS["down"] or event.key in KEYBINDS["left"] or event.key in KEYBINDS["up"]:
+                    previewing_move = False
+                if event.key in KEYBINDS["preview"] and profile.settings["preview"]:
+                    preview_held = False
         elif event.type == pg.MOUSEBUTTONDOWN and event.button == 1:
             
             active_buttons = buttons[menu]
@@ -1064,7 +1113,7 @@ while game_running:
                         if profile.name != "":
                             profile.save_to_file()
                         else:
-                            with open(PATH+"lastopen.txt", "w") as file:
+                            with open(PATH+"profiles/lastopen.txt", "w") as file:
                                 file.write("")
                         game_running = False
 
@@ -1192,7 +1241,10 @@ while game_running:
                         elif b == "settings_right3":
                             if profile.settings["height"] < 10:
                                 profile.settings["height"] += 1
-
+                        elif b == "settings_left4":
+                            profile.settings["preview"] = not profile.settings["preview"]
+                        elif b == "settings_right4":
+                            profile.settings["preview"] = not profile.settings["preview"]
                     elif page == 2:
                             
                         if b == "settings_left1":
@@ -1238,12 +1290,12 @@ while game_running:
                 if i[1] != i[3] and i[1] != None:
                     scatter_particles((get_grid_width(tile_size, border_size, i[2][0])+tile_size*0.5+board_pos.x, 
                                     get_grid_width(tile_size, border_size, i[2][1])+tile_size*0.5+board_pos.y), 
-                                    15, get_tile_col(i[3]), 0.8, 12, 300, 300)
+                                    tile_size*0.15, get_tile_col(i[3]), 0.8, 12, tile_size*2.5, tile_size*2.5)
             for i in board.anim_seeds:
                 if i[2] == None:
                     scatter_particles((get_grid_width(seed_size, border_size, i[1]%seed_columns)+seed_size*0.5+seed_pos.x, 
                                     get_grid_width(seed_size, border_size, i[1]//seed_columns+1)+seed_size*0.5+seed_pos.y), 
-                                    15, get_tile_col(i[0]), 0.4, 12, 150, 150)
+                                    seed_size*0.3, get_tile_col(i[0]), 0.4, 12, seed_size*3, seed_size*3)
 
     main_dis.fill(BG_COL)
 
@@ -1252,10 +1304,10 @@ while game_running:
             b.display(main_dis, pg.mouse.get_pos())
     
     if menu == "": # main game
-        board_surf = board.display(tile_size, border_size, anim_timer)
+        board_surf = board.display(tile_size, border_size, anim_timer, previewing_move)
         main_dis.blit(board_surf, board_pos.topleft)
 
-        seed_list_surf = board.display_seed_list(seed_size, border_size, seed_columns, 1, anim_timer)
+        seed_list_surf = board.display_seed_list(seed_size, border_size, seed_columns, anim_timer, previewing_move)
         main_dis.blit(seed_list_surf, seed_pos.topleft)
 
         if anim_timer < 0.5:
@@ -1286,6 +1338,7 @@ while game_running:
             center_text(main_dis, huge_font, f"gamemode: {GAMEMODE_DESCRIPTIONS[profile.settings["mode"]]}", BLACK, DISPLAY_WIDTH*0.5, button_size*1.5)
             center_text(main_dis, huge_font, f"width: {profile.settings["width"]}", BLACK, DISPLAY_WIDTH*0.5, button_size*2.5)
             center_text(main_dis, huge_font, f"height: {profile.settings["height"]}", BLACK, DISPLAY_WIDTH*0.5, button_size*3.5)
+            center_text(main_dis, huge_font, f"previews: {"on" if profile.settings["preview"] else "off"}", BLACK, DISPLAY_WIDTH*0.5, button_size*4.5)
 
             if not profile.has_default_settings():
                 center_text(main_dis, huge_font, f"note: stats disabled", BLACK, DISPLAY_WIDTH*0.5, DISPLAY_HEIGHT-button_size*2.5)
