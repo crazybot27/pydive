@@ -493,7 +493,7 @@ class Button:
     def __init__(self, pos, text="", img=None, hover_img=None):
 
         self.pos = pg.Rect(pos)
-        self.text = text
+
         if img == None:
             self.img = pg.transform.scale(button_off_sprite, self.pos.size)
         else:
@@ -503,17 +503,30 @@ class Button:
         else:
             self.hover_img = pg.transform.scale(hover_img, self.pos.size)
 
+        self.update_text(text)
+
     def display(self, surf, mouse_pos):
 
         if self.pos.collidepoint(mouse_pos):
-            sprite = self.hover_img
+            sprite = self.hover_img.copy()
         else:
-            sprite = self.img
-
+            sprite = self.img.copy()
+        
+        if self.text_img != None:
+            sprite.blit(self.text_img, ((sprite.get_width()-self.text_img.get_width())/2, (sprite.get_height()-self.text_img.get_height())/2))
+        
         surf.blit(sprite, self.pos.topleft)
-        if self.text != "":
-            t = big_font.render(self.text, 1, BLACK)
-            surf.blit(t, (self.pos.centerx-t.get_width()*0.5, self.pos.centery-t.get_height()*0.5))
+
+    def update_text(self, text):
+
+        if text != "":
+            self.text_img = huge_font.render(text, 1, BLACK)
+            if self.text_img.get_width() > self.pos.width-2*border_size:
+                self.text_img = big_font.render(text, 1, BLACK)
+            if self.text_img.get_width() > self.pos.width-2*border_size:
+                self.text_img = lil_font.render(text, 1, BLACK)
+        else:
+            self.text_img = None
 
     def collide(self, mouse_pos):
 
@@ -564,7 +577,13 @@ class Profile:
             self.stats["history"] = []
         if "svalbard" not in self.stats:
             self.stats["svalbard"] = {}
-
+        if "maxseed" not in self.stats:
+            self.stats["maxseed"] = 2
+        if "numseeds" not in self.stats:
+            self.stats["numseeds"] = 1
+        if "gamesplayed" not in self.stats:
+            self.stats["gamesplayed"] = 0
+        
     def has_default_settings(self):
         for i in self.default_settings:
             if self.default_settings[i] != self.settings[i]:
@@ -592,6 +611,10 @@ class Profile:
                 self.stats["svalbard"][i] += 1
         self.board = None
 
+        self.stats["gamesplayed"] = len(self.stats["history"])
+        self.stats["numseeds"] = len(self.stats["svalbard"].keys())
+        self.stats["maxseed"] = 0 if len(self.stats["svalbard"]) == 0 else max(self.stats["svalbard"].keys())
+
     def restart_game(self):
 
         self.update_stats()
@@ -605,6 +628,8 @@ class Profile:
 
         with open(PATH+f"profiles/{self.name}.dive", "wb") as file:
             pickle.dump(self, file)
+        with open(PATH+"lastopen.txt", "w") as file:
+            file.write(self.name)
 
     # save board to our saved boards
     def save_board(self, slot):
@@ -825,11 +850,11 @@ def configure_ui(profile):
                         img=pg.transform.rotate(button_arrow_off_sprite, 90),
                         hover_img=pg.transform.rotate(button_arrow_on_sprite, 90)),
         "seed_up": Button((seed_pos.left, 
-                        DISPLAY_HEIGHT-arrow_size-border_size, arrow_size, arrow_size),
+                        DISPLAY_HEIGHT-arrow_size-border_size, seed_pos.width*0.5, arrow_size),
                         img=pg.transform.rotate(button_arrow_off_sprite, 90),
                         hover_img=pg.transform.rotate(button_arrow_on_sprite, 90)),
-        "seed_down": Button((seed_pos.right-arrow_size, 
-                        DISPLAY_HEIGHT-arrow_size-border_size, arrow_size, arrow_size),
+        "seed_down": Button((seed_pos.centerx, 
+                        DISPLAY_HEIGHT-arrow_size-border_size, seed_pos.width*0.5, arrow_size),
                         img=pg.transform.rotate(button_arrow_off_sprite, 270),
                         hover_img=pg.transform.rotate(button_arrow_on_sprite, 270)),
         "settings": Button((DISPLAY_WIDTH*0.75+border_size, 
@@ -926,7 +951,14 @@ lil_font = pg.font.Font(PATH+"Lato-Regular.ttf", 18)
 mini_font = pg.font.Font(PATH+"Lato-Regular.ttf", 12)
 micro_font = pg.font.Font(PATH+"Lato-Regular.ttf", 8)
 
-profile = Profile("")
+try:
+    with open(PATH+"lastopen.txt") as file:
+        profile = load_profile(file.read())
+        if profile == None:
+            profile = Profile("")
+except:
+    profile = Profile("")
+
 profile.init_data()
 board = profile.get_board()
 configure_ui(profile)
@@ -944,6 +976,9 @@ while game_running:
         if event.type == pg.QUIT:
             if profile.name != "":
                 profile.save_to_file()
+            else:
+                with open(PATH+"lastopen.txt", "w") as file:
+                    file.write("")
             game_running = False
         elif event.type == pg.KEYDOWN:
             if menu == "":
@@ -969,9 +1004,9 @@ while game_running:
                 if len(entered_name) != 0:
                     check_profile = load_profile(entered_name)
                     if check_profile == None:
-                        buttons["profile"]["login"].text = "create profile"
+                        buttons["profile"]["login"].update_text("create profile")
                     else:
-                        buttons["profile"]["login"].text = "load profile"
+                        buttons["profile"]["login"].update_text("load profile")
                 
         elif event.type == pg.MOUSEBUTTONDOWN and event.button == 1:
             
@@ -985,8 +1020,9 @@ while game_running:
                     elif b == "seed_down":
                         seed_pos.y -= seed_size
                     elif b == "seed_up":
-                        if seed_pos.y < border_size:
-                            seed_pos.y += seed_size
+                        seed_pos.y += seed_size
+                        if seed_pos.y > border_size:
+                            seed_pos.y = border_size
 
                     elif b == "restart":
                         profile.restart_game()
@@ -997,11 +1033,11 @@ while game_running:
                     elif b == "settings":
                         menu = "settings"
                         page = 1
-                        buttons["settings"]["settings_next_page"].text = f"page {page}"
+                        buttons["settings"]["settings_next_page"].update_text(f"page {page}")
 
                     elif b == "save":
                         menu = "save"
-                        buttons["save"]["save_game"].text = "save"
+                        buttons["save"]["save_game"].update_text("save")
                         save_files = profile.get_saved_boards()
                         selected_slot = None
 
@@ -1015,9 +1051,9 @@ while game_running:
                     elif b == "profile":
                         menu = "profile"
                         if profile.name == "":
-                            buttons["profile"]["login"].text = "create profile"
+                            buttons["profile"]["login"].update_text("create profile")
                         else:
-                            buttons["profile"]["login"].text = "save and logout"
+                            buttons["profile"]["login"].update_text("save and logout")
                         entered_name = ""
                         check_profile = None
 
@@ -1027,13 +1063,16 @@ while game_running:
                     elif b == "exit":
                         if profile.name != "":
                             profile.save_to_file()
+                        else:
+                            with open(PATH+"lastopen.txt", "w") as file:
+                                file.write("")
                         game_running = False
 
                     elif b == "settings_next_page":
                         page += 1
                         if page > 2:
                             page = 1
-                        buttons["settings"]["settings_next_page"].text = f"page {page}"
+                        buttons["settings"]["settings_next_page"].update_text(f"page {page}")
                     
                     elif b == "svalbard_left":
 
@@ -1071,9 +1110,9 @@ while game_running:
                         selected_slot = int(b[-1])-1
 
                         if save_files[selected_slot] == None:
-                            buttons["save"]["save_game"].text = "save"
+                            buttons["save"]["save_game"].update_text("save")
                         else:
-                            buttons["save"]["save_game"].text = "overwrite"
+                            buttons["save"]["save_game"].update_text("overwrite")
 
                     elif b == "save_game":
 
@@ -1106,7 +1145,7 @@ while game_running:
                                 configure_ui(profile)
                                 menu = ""
                                 just_moved = True
-                                buttons[""]["profile"].text = profile.name+".dive"
+                                buttons[""]["profile"].update_text(profile.name+".dive")
 
                             elif check_profile != None:
                                 
@@ -1118,7 +1157,7 @@ while game_running:
                                 configure_ui(profile)
                                 menu = ""
                                 just_moved = True
-                                buttons[""]["profile"].text = profile.name+".dive"
+                                buttons[""]["profile"].update_text(profile.name+".dive")
                                 
                         else:
 
@@ -1129,7 +1168,7 @@ while game_running:
                             configure_ui(profile)
                             menu = ""
                             just_moved = True
-                            buttons[""]["profile"].text = "[no profile]"
+                            buttons[""]["profile"].update_text("[no profile]")
                     
                     if page == 1:
                         
@@ -1208,9 +1247,9 @@ while game_running:
 
     main_dis.fill(BG_COL)
 
-    for b in buttons[menu].values():
-        b.display(main_dis, pg.mouse.get_pos())
-
+    if menu != "":
+        for b in buttons[menu].values():
+            b.display(main_dis, pg.mouse.get_pos())
     
     if menu == "": # main game
         board_surf = board.display(tile_size, border_size, anim_timer)
@@ -1234,6 +1273,9 @@ while game_running:
         main_dis.blit(high_score_surf, (score_pos.right+border_size, score_pos.top))
         center_text(main_dis, lil_font, "best", WHITE, score_pos.centerx+score_pos.width+border_size, score_pos.top+border_size)
 
+        for b in buttons[menu].values():
+            b.display(main_dis, pg.mouse.get_pos())
+    
         display_particles(main_dis)
 
     elif menu == "settings": # settings menu
@@ -1271,17 +1313,16 @@ while game_running:
     elif menu == "stats":
         center_text(main_dis, huge_font, "stats", BLACK, DISPLAY_WIDTH*0.5, button_size*0.5)
 
-        stat_labels = [("games played:", len(profile.stats["history"])),
+        stat_labels = [("games played:", profile.stats["gamesplayed"]),
                        ("high score:", profile.stats["highscore"]),
-                       ("unique seeds discovered:", len(profile.stats["svalbard"].keys())),
-                       ("highest seed discovered:", 0 if len(profile.stats["svalbard"]) == 0 else max(profile.stats["svalbard"].keys()))]
+                       ("unique seeds discovered:", profile.stats["numseeds"]),
+                       ("highest seed discovered:", profile.stats["maxseed"])]
         for i, j in enumerate(stat_labels):
             text = huge_font.render(j[0], 1, BLACK)
             main_dis.blit(text, (button_size*2+border_size, (button_size+border_size)*(1.5+i)-text.get_height()*0.5))
             main_dis.blit(draw_tile((j[1]), button_size), (button_size*2+text.get_width()+border_size*2, (button_size+border_size)*(1+i)))
 
         center_text(main_dis, huge_font, f"note: current game is not included in stats", BLACK, DISPLAY_WIDTH*0.5, DISPLAY_HEIGHT-button_size*2.5)
-        #center_text(main_dis, huge_font, f"games played: {len(profile.stats["history"])}", BLACK, DISPLAY_WIDTH*0.25, button_size*1.5)
     
     elif menu == "svalbard":
         center_text(main_dis, huge_font, f"svalbard (page {page})", BLACK, DISPLAY_WIDTH*0.5, button_size*0.5)
