@@ -270,6 +270,7 @@ class Board:
         self.preview_board = Board(self.width, self.height, self.mode)
         self.preview_board.tiles = [[i for i in j] for j in self.tiles]
         self.preview_board.seeds = [i for i in self.seeds]
+        self.preview_board.tainted = self.tainted
 
         self.preview_board.move(direction, preview=True)
 
@@ -1249,10 +1250,10 @@ while game_running:
                             
                         if b == "settings_left1":
                             if profile.settings["animspeed"] > 0:
-                                profile.settings["animspeed"] -= 50
+                                profile.settings["animspeed"] -= 25
                         elif b == "settings_right1":
                             if profile.settings["animspeed"] < 1000:
-                                profile.settings["animspeed"] += 50
+                                profile.settings["animspeed"] += 25
                         elif b == "settings_left2":
                             profile.settings["particles"] = not profile.settings["particles"]
                         elif b == "settings_right2":
@@ -1318,7 +1319,9 @@ while game_running:
         main_dis.blit(score_surf, score_pos.topleft)
         center_text(main_dis, lil_font, "score", WHITE, score_pos.centerx, score_pos.top+border_size)
 
-        if anim_timer < 0.5:
+        if board.tainted:
+            high_score_surf = draw_tile(profile.stats["highscore"], button_size)
+        elif anim_timer < 0.5:
             high_score_surf = draw_tile(max(board.anim_score, profile.stats["highscore"]), button_size)
         else:
             high_score_surf = draw_tile(max(board.score, profile.stats["highscore"]), button_size)
@@ -1401,7 +1404,7 @@ while game_running:
     elif menu == "profile":
         center_text(main_dis, huge_font, "profile", BLACK, DISPLAY_WIDTH*0.5, button_size*0.5)
         if profile.name == "":
-            center_text(main_dis, huge_font, "no profile loaded. type a profile name to create or load one.", BLACK, DISPLAY_WIDTH*0.5, button_size*1.5)
+            center_text(main_dis, huge_font, "no profile loaded. type profile name to create or load one.", BLACK, DISPLAY_WIDTH*0.5, button_size*1.5)
             center_text(main_dis, huge_font, f"profile name: {entered_name}.dive", BLACK, DISPLAY_WIDTH*0.5, button_size*2.5)
             if len(entered_name) > 0:
                 if check_profile == None:
