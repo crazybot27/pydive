@@ -826,7 +826,7 @@ def scatter_particles(pos, size, col, life, count, spread_min, spread_max):
 def configure_ui(profile):
 
     board = profile.get_board()
-    global board_pos, seed_pos, score_pos, tile_size, border_size, seed_columns, seed_size, svalbard_columns, svalbard_rows, svalbard_size, svalbard_pos, button_size, arrow_size, buttons
+    global board_pos, seed_pos, score_pos, tile_size, border_size, seed_columns, seed_size, stats_columns, stats_rows, stats_size, stats_pos, button_size, arrow_size, buttons
 
     border_size = int(min(8, DISPLAY_WIDTH/80, DISPLAY_HEIGHT/60))
     tile_size = (min(DISPLAY_WIDTH*0.5, DISPLAY_HEIGHT*0.75)-border_size*(max(board.width, board.height)+1))/max(board.width, board.height)
@@ -836,10 +836,10 @@ def configure_ui(profile):
     button_size = DISPLAY_HEIGHT/8-border_size
     arrow_size = min((DISPLAY_HEIGHT-get_grid_width(tile_size, border_size, max(board.width, board.height))-border_size*3)*0.5, button_size)
 
-    svalbard_columns = int(max((DISPLAY_WIDTH-button_size*2)//(80+border_size), 1))
-    svalbard_rows = int(max((DISPLAY_HEIGHT-button_size*3)//(80+border_size), 1))
-    svalbard_size = (DISPLAY_WIDTH-button_size*2-border_size*(svalbard_columns+1))/svalbard_columns
-    svalbard_pos = (button_size, button_size)
+    stats_columns = int(max((DISPLAY_WIDTH-button_size*2)//(80+border_size), 1))
+    stats_rows = int(max((DISPLAY_HEIGHT-button_size*3)//(80+border_size), 1))
+    stats_size = (DISPLAY_WIDTH-button_size*2-border_size*(stats_columns+1))/stats_columns
+    stats_pos = (button_size, button_size)
 
     board_pos = pg.Rect((DISPLAY_WIDTH-get_grid_width(tile_size, border_size, max(board.width, board.height)))*0.5, 
                         border_size, 
@@ -873,6 +873,8 @@ def configure_ui(profile):
                         board_pos.bottom+border_size, arrow_size, arrow_size),
                         img=pg.transform.rotate(button_arrow_off_sprite, 90),
                         hover_img=pg.transform.rotate(button_arrow_on_sprite, 90)),
+        "preview": Button((board_pos.centerx-arrow_size*1.5, 
+                        board_pos.bottom+border_size, arrow_size, arrow_size)),
         "seed_up": Button((seed_pos.left, 
                         DISPLAY_HEIGHT-arrow_size-border_size, seed_pos.width*0.5, arrow_size),
                         img=pg.transform.rotate(button_arrow_off_sprite, 90),
@@ -912,6 +914,8 @@ def configure_ui(profile):
     }, "stats": {
         "svalbard": Button((DISPLAY_WIDTH-button_size*2, (button_size+border_size)*3, button_size*2, button_size),
                         text="svalbard"),
+        "history": Button((DISPLAY_WIDTH-button_size*2, button_size+border_size, button_size*2, button_size),
+                        text="history"),
         "back": Button((button_size, DISPLAY_HEIGHT-button_size, DISPLAY_WIDTH-button_size*2, button_size),
                         text="back"),
     }, "profile": {
@@ -928,7 +932,16 @@ def configure_ui(profile):
                         hover_img=button_arrow_on_sprite),
         "back": Button((button_size, DISPLAY_HEIGHT-button_size, DISPLAY_WIDTH-button_size*2, button_size),
                         text="back"),
-    },
+    }, "history": {
+        "history_left": Button((0, button_size, button_size, button_size),
+                        img=pg.transform.rotate(button_arrow_off_sprite, 180),
+                        hover_img=pg.transform.rotate(button_arrow_on_sprite, 180)),
+        "history_right": Button((DISPLAY_WIDTH-button_size, button_size, button_size, button_size),
+                        img=button_arrow_off_sprite,
+                        hover_img=button_arrow_on_sprite),
+        "back": Button((button_size, DISPLAY_HEIGHT-button_size, DISPLAY_WIDTH-button_size*2, button_size),
+                        text="back"),
+    }
     }
 
     for i in range(5):
@@ -1074,6 +1087,9 @@ while game_running:
                         if seed_pos.y > border_size:
                             seed_pos.y = border_size
 
+                    elif b == "preview":
+                        if profile.settings["preview"]:
+                            preview_held = not preview_held
                     elif b == "restart":
                         profile.restart_game()
                         board = profile.get_board()
@@ -1096,6 +1112,10 @@ while game_running:
                     
                     elif b == "svalbard":
                         menu = "svalbard"
+                        page = 1  
+
+                    elif b == "history":
+                        menu = "history"
                         page = 1     
 
                     elif b == "profile":
@@ -1109,6 +1129,7 @@ while game_running:
 
                     elif b == "back":
                         menu = ""
+                        preview_held = False
 
                     elif b == "exit":
                         if profile.name != "":
@@ -1132,8 +1153,8 @@ while game_running:
                         while page > 1 and not valid_page:
                             valid_page = False
                             page -= 1
-                            for i in range(svalbard_columns*svalbard_rows):
-                                if (page-1)*svalbard_columns*svalbard_rows+i in achieved:
+                            for i in range(stats_columns*stats_rows):
+                                if (page-1)*stats_columns*stats_rows+i in achieved:
                                     valid_page = True
                                     break
                     
@@ -1144,15 +1165,26 @@ while game_running:
                         if len(achieved) == 0:
                             highest_page = 1
                         else:
-                            highest_page = max(achieved)//(svalbard_columns*svalbard_rows)+1
+                            highest_page = max(achieved)//(stats_columns*stats_rows)+1
                         valid_page = False
                         while page < highest_page and not valid_page:
                             valid_page = False
                             page += 1
-                            for i in range(svalbard_columns*svalbard_rows):
-                                if (page-1)*svalbard_columns*svalbard_rows+i in achieved:
+                            for i in range(stats_columns*stats_rows):
+                                if (page-1)*stats_columns*stats_rows+i in achieved:
                                     valid_page = True
                                     break
+                    
+                    elif b == "history_left":
+                        
+                        if page > 1:
+                            page -= 1
+
+                    elif b == "history_right":
+
+                        highest_page = len(profile.stats["history"])//(stats_columns*stats_rows)+1
+                        if page < highest_page:
+                            page += 1
 
                     if b.startswith("slot"):
 
@@ -1328,6 +1360,11 @@ while game_running:
         main_dis.blit(high_score_surf, (score_pos.right+border_size, score_pos.top))
         center_text(main_dis, lil_font, "best", WHITE, score_pos.centerx+score_pos.width+border_size, score_pos.top+border_size)
 
+        if preview_held:
+            buttons[""]["preview"].update_text("preview")
+        else:
+            buttons[""]["preview"].update_text("move")
+
         for b in buttons[menu].values():
             b.display(main_dis, pg.mouse.get_pos())
     
@@ -1383,23 +1420,39 @@ while game_running:
     elif menu == "svalbard":
         center_text(main_dis, huge_font, f"svalbard (page {page})", BLACK, DISPLAY_WIDTH*0.5, button_size*0.5)
 
-        start_index = (page-1)*svalbard_columns*svalbard_rows
+        start_index = (page-1)*stats_columns*stats_rows
         achieved = profile.stats["svalbard"].keys()
-        for i in range(svalbard_rows):
-            for j in range(svalbard_columns):
-                svalbard_tile = start_index+i*svalbard_columns+j
+        for i in range(stats_rows):
+            for j in range(stats_columns):
+                svalbard_tile = start_index+i*stats_columns+j
                 if svalbard_tile < 2:
                     continue
-                t = draw_tile(svalbard_tile, svalbard_size)
+                t = draw_tile(svalbard_tile, stats_size)
                 if svalbard_tile not in achieved:
                     t.set_alpha(63)
 
-                pos = (get_grid_width(svalbard_size, border_size, j)+svalbard_pos[0], get_grid_width(svalbard_size, border_size, i)+svalbard_pos[1])
+                pos = (get_grid_width(stats_size, border_size, j)+stats_pos[0], get_grid_width(stats_size, border_size, i)+stats_pos[1])
                 main_dis.blit(t, pos)
-                if pg.Rect(pos, (svalbard_size, svalbard_size)).collidepoint(pg.mouse.get_pos()):
+                if pg.Rect(pos, (stats_size, stats_size)).collidepoint(pg.mouse.get_pos()):
                     times = 0 if svalbard_tile not in achieved else profile.stats["svalbard"][svalbard_tile]
                     center_text(main_dis, huge_font, f"unlocked this seed in {times} game{"" if times == 1 else "s"}", BLACK, DISPLAY_WIDTH*0.5, DISPLAY_HEIGHT-button_size*1.5)
 
+    elif menu == "history":
+
+        center_text(main_dis, huge_font, f"game history (page {page})", BLACK, DISPLAY_WIDTH*0.5, button_size*0.5)
+
+        start_index = len(profile.stats["history"])-((page-1)*stats_columns*stats_rows)-1
+        for i in range(stats_rows):
+            for j in range(stats_columns):
+                index = start_index-i*stats_columns-j
+                if index < 0:
+                    continue
+                t = draw_tile(profile.stats["history"][index], stats_size)
+                pos = (get_grid_width(stats_size, border_size, j)+stats_pos[0], get_grid_width(stats_size, border_size, i)+stats_pos[1])
+
+                main_dis.blit(t, pos)
+                if pg.Rect(pos, (stats_size, stats_size)).collidepoint(pg.mouse.get_pos()):
+                    center_text(main_dis, huge_font, f"game #{index+1}", BLACK, DISPLAY_WIDTH*0.5, DISPLAY_HEIGHT-button_size*1.5)
 
     elif menu == "profile":
         center_text(main_dis, huge_font, "profile", BLACK, DISPLAY_WIDTH*0.5, button_size*0.5)
