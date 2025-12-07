@@ -346,7 +346,9 @@ class Board:
     def display_seed_list(self, seed_size, border, columns, anim_timer, preview=False):
 
         if preview:
-            return self.preview_board.display_seed_list(seed_size, border, columns, 1.0)
+            s = self.preview_board.display_seed_list(seed_size, border, columns, 1.0)
+            s.fill(pg.Color(15, 15, 15), special_flags=pg.BLEND_RGBA_ADD)
+            return s
 
         if anim_timer < 1.0:
             rows = math.ceil(max(len([1 for x in self.anim_seeds if x[1] != None]),len([1 for x in self.anim_seeds if x[2] != None]))/float(columns))
@@ -422,6 +424,7 @@ class Board:
 
         if preview:
             s = self.preview_board.display(tile_size, border, 1.0)
+            s.fill(pg.Color(15, 15, 15), special_flags=pg.BLEND_RGBA_ADD)
             return s
 
         s = pg.Surface((get_grid_width(tile_size, border, self.width), 
@@ -969,6 +972,8 @@ def load_profile(profile_name):
     
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+
+
 pg.init()
 main_dis = pg.display.set_mode(DISPLAY_SIZE, flags=pg.RESIZABLE)
 pg.display.set_caption("pydive")
@@ -976,10 +981,13 @@ clock = pg.time.Clock()
 
 prime_sprites = [pg.image.load(PATH+f"sprites/tile_{x}.png").convert_alpha() for x in PRIMES]
 zero_sprite = pg.image.load(PATH+"sprites/zero.png").convert_alpha()
+icon_sprite = pg.image.load(PATH+"sprites/icon.png").convert_alpha()
 button_off_sprite = pg.image.load(PATH+"sprites/button_off.png").convert_alpha()
 button_on_sprite = pg.image.load(PATH+"sprites/button_on.png").convert_alpha()
 button_arrow_off_sprite = pg.image.load(PATH+"sprites/button_arrow_off.png").convert_alpha()
 button_arrow_on_sprite = pg.image.load(PATH+"sprites/button_arrow_on.png").convert_alpha()
+
+pg.display.set_icon(icon_sprite)
 
 # pygame please let me change font size in a better way than this
 huge_font = pg.font.Font(PATH+"Lato-Regular.ttf", 36)
@@ -1006,7 +1014,7 @@ page = 0
 just_moved = True
 
 preview_held = False
-previewing_move = False
+previewing_move = None
 
 menu = ""
 game_running = True
@@ -1025,25 +1033,25 @@ while game_running:
                 if event.key in KEYBINDS["right"]:
                     if preview_held:
                         board.preview_move("right")
-                        previewing_move = True
+                        previewing_move = "right"
                     else:
                         just_moved = board.move("right")
                 elif event.key in KEYBINDS["down"]:
                     if preview_held:
                         board.preview_move("down")
-                        previewing_move = True
+                        previewing_move = "down"
                     else:
                             just_moved = board.move("down")
                 elif event.key in KEYBINDS["left"]:
                     if preview_held:
                         board.preview_move("left")
-                        previewing_move = True
+                        previewing_move = "left"
                     else:
                         just_moved = board.move("left")
                 elif event.key in KEYBINDS["up"]:
                     if preview_held:
                         board.preview_move("up")
-                        previewing_move = True
+                        previewing_move = "up"
                     else:
                         just_moved = board.move("up")
                 elif event.key in KEYBINDS["restart"]:
@@ -1068,9 +1076,10 @@ while game_running:
         elif event.type == pg.KEYUP:
             if menu == "":
                 if event.key in KEYBINDS["right"] or event.key in KEYBINDS["down"] or event.key in KEYBINDS["left"] or event.key in KEYBINDS["up"]:
-                    previewing_move = False
+                    previewing_move = None
                 if event.key in KEYBINDS["preview"] and profile.settings["preview"]:
                     preview_held = False
+                    previewing_move = None
         elif event.type == pg.MOUSEBUTTONDOWN and event.button == 1:
             
             active_buttons = buttons[menu]
@@ -1078,7 +1087,14 @@ while game_running:
                 if active_buttons[b].collide(pg.mouse.get_pos()):
 
                     if b in ["right", "down", "left", "up"]:
-                        just_moved = board.move(b)
+                        if preview_held:
+                            if previewing_move == None:
+                                board.preview_move(b)
+                                previewing_move = b
+                            else:
+                                previewing_move = None
+                        else:
+                            just_moved = board.move(b)
 
                     elif b == "seed_down":
                         seed_pos.y -= seed_size
@@ -1090,6 +1106,8 @@ while game_running:
                     elif b == "preview":
                         if profile.settings["preview"]:
                             preview_held = not preview_held
+                            if not preview_held:
+                                previewing_move = None
                     elif b == "restart":
                         profile.restart_game()
                         board = profile.get_board()
@@ -1316,20 +1334,6 @@ while game_running:
     else:
         anim_timer = 1.0
 
-    if anim_stage == 0 and anim_timer > 0.5:
-        anim_stage = 1
-        if profile.settings["particles"]:
-            for i in board.anim_tiles:
-                if i[1] != i[3] and i[1] != None:
-                    scatter_particles((get_grid_width(tile_size, border_size, i[2][0])+tile_size*0.5+board_pos.x, 
-                                    get_grid_width(tile_size, border_size, i[2][1])+tile_size*0.5+board_pos.y), 
-                                    tile_size*0.15, get_tile_col(i[3]), 0.8, 12, tile_size*2.5, tile_size*2.5)
-            for i in board.anim_seeds:
-                if i[2] == None:
-                    scatter_particles((get_grid_width(seed_size, border_size, i[1]%seed_columns)+seed_size*0.5+seed_pos.x, 
-                                    get_grid_width(seed_size, border_size, i[1]//seed_columns+1)+seed_size*0.5+seed_pos.y), 
-                                    seed_size*0.3, get_tile_col(i[0]), 0.4, 12, seed_size*3, seed_size*3)
-
     main_dis.fill(BG_COL)
 
     if menu != "":
@@ -1337,10 +1341,10 @@ while game_running:
             b.display(main_dis, pg.mouse.get_pos())
     
     if menu == "": # main game
-        board_surf = board.display(tile_size, border_size, anim_timer, previewing_move)
+        board_surf = board.display(tile_size, border_size, anim_timer, previewing_move!=None)
         main_dis.blit(board_surf, board_pos.topleft)
 
-        seed_list_surf = board.display_seed_list(seed_size, border_size, seed_columns, anim_timer, previewing_move)
+        seed_list_surf = board.display_seed_list(seed_size, border_size, seed_columns, anim_timer, previewing_move!=None)
         main_dis.blit(seed_list_surf, seed_pos.topleft)
 
         if anim_timer < 0.5:
@@ -1360,6 +1364,33 @@ while game_running:
         main_dis.blit(high_score_surf, (score_pos.right+border_size, score_pos.top))
         center_text(main_dis, lil_font, "best", WHITE, score_pos.centerx+score_pos.width+border_size, score_pos.top+border_size)
 
+        if anim_stage == 0 and anim_timer > 0.5:
+            anim_stage = 1
+            if profile.settings["particles"]:
+                for i in board.anim_tiles:
+                    if i[1] != i[3] and i[1] != None:
+                        scatter_particles((get_grid_width(tile_size, border_size, i[2][0])+tile_size*0.5+board_pos.x, 
+                                        get_grid_width(tile_size, border_size, i[2][1])+tile_size*0.5+board_pos.y), 
+                                        tile_size*0.15, get_tile_col(i[3]), 0.8, 12, tile_size*2.5, tile_size*2.5)
+                for i in board.anim_seeds:
+                    if i[2] == None:
+                        scatter_particles((get_grid_width(seed_size, border_size, i[1]%seed_columns)+seed_size*0.5+seed_pos.x, 
+                                        get_grid_width(seed_size, border_size, i[1]//seed_columns+1)+seed_size*0.5+seed_pos.y), 
+                                        seed_size*0.3, get_tile_col(i[0]), 0.4, 12, seed_size*3, seed_size*3)
+
+        if profile.settings["particles"] and previewing_move != None and random.random() < 0.4:
+            if previewing_move == "right":
+                direction = Vector2(1, 0)
+            elif previewing_move == "down":
+                direction = Vector2(0, 1)
+            elif previewing_move == "left":
+                direction = Vector2(-1, 0)
+            elif previewing_move == "up":
+                direction = Vector2(0, -1)
+            else:
+                direction = (0, 0)
+            Particle((random.randint(board_pos.left, board_pos.right), random.randint(board_pos.top, board_pos.bottom)), direction*tile_size*3, tile_size*0.15, pg.Color(255, 255, 255), 0.3)
+        
         if preview_held:
             buttons[""]["preview"].update_text("preview")
         else:
