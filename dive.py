@@ -3,6 +3,7 @@ from pygame.math import Vector2
 import random
 import math
 import pickle
+import csv
 from copy import deepcopy
 
 VERSION = "0.1.0"
@@ -658,6 +659,22 @@ class Profile:
         with open(PATH+"profiles/lastopen.txt", "w") as file:
             file.write(self.name)
 
+    def export_svalbard(self):
+        with open(PATH+"svalbard.csv", "w", newline="") as file:
+            w = csv.writer(file, delimiter=",")
+            k = list(self.stats["svalbard"].keys())
+            k.sort()
+            for i in k:
+                w.writerow([i, self.stats["svalbard"][i]])
+
+    def export_history(self):
+
+        with open(PATH+"history.csv", "w", newline="") as file:
+            w = csv.writer(file, delimiter=",")
+            k = list(self.stats["history"])
+            for i, j in enumerate(k):
+                w.writerow([i+1, j])
+
     # save board to our saved boards
     def save_board(self, slot):
 
@@ -933,6 +950,8 @@ def configure_ui(profile):
         "svalbard_right": Button((DISPLAY_WIDTH-button_size, button_size, button_size, button_size),
                         img=button_arrow_off_sprite,
                         hover_img=button_arrow_on_sprite),
+        "export_svalbard": Button((DISPLAY_WIDTH-button_size, button_size*2, button_size, button_size),
+                        text="export"),
         "back": Button((button_size, DISPLAY_HEIGHT-button_size, DISPLAY_WIDTH-button_size*2, button_size),
                         text="back"),
     }, "history": {
@@ -942,6 +961,8 @@ def configure_ui(profile):
         "history_right": Button((DISPLAY_WIDTH-button_size, button_size, button_size, button_size),
                         img=button_arrow_off_sprite,
                         hover_img=button_arrow_on_sprite),
+        "export_history": Button((DISPLAY_WIDTH-button_size, button_size*2, button_size, button_size),
+                        text="export"),
         "back": Button((button_size, DISPLAY_HEIGHT-button_size, DISPLAY_WIDTH-button_size*2, button_size),
                         text="back"),
     }
@@ -971,8 +992,6 @@ def load_profile(profile_name):
         return None
     
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
-
 
 pg.init()
 main_dis = pg.display.set_mode(DISPLAY_SIZE, flags=pg.RESIZABLE)
@@ -1082,6 +1101,7 @@ while game_running:
                     previewing_move = None
         elif event.type == pg.MOUSEBUTTONDOWN and event.button == 1:
             
+            # awful button code
             active_buttons = buttons[menu]
             for b in active_buttons:
                 if active_buttons[b].collide(pg.mouse.get_pos()):
@@ -1130,10 +1150,12 @@ while game_running:
                     
                     elif b == "svalbard":
                         menu = "svalbard"
+                        buttons["svalbard"]["export_svalbard"].update_text("export")
                         page = 1  
 
                     elif b == "history":
                         menu = "history"
+                        buttons["history"]["export_history"].update_text("export")
                         page = 1     
 
                     elif b == "profile":
@@ -1193,6 +1215,11 @@ while game_running:
                                     valid_page = True
                                     break
                     
+                    elif b == "export_svalbard":
+
+                        profile.export_svalbard()
+                        buttons["svalbard"]["export_svalbard"].update_text("exported!")
+
                     elif b == "history_left":
                         
                         if page > 1:
@@ -1203,6 +1230,11 @@ while game_running:
                         highest_page = len(profile.stats["history"])//(stats_columns*stats_rows)+1
                         if page < highest_page:
                             page += 1
+
+                    elif b == "export_history":
+
+                        profile.export_history()
+                        buttons["history"]["export_history"].update_text("exported!")
 
                     if b.startswith("slot"):
 
