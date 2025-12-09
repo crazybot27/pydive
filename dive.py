@@ -707,9 +707,73 @@ class Profile:
 
         return [None if self.saved_boards[i] == None else pickle.loads(self.saved_boards[i]) for i in range(5)]
 
+    def chart_stats(self, size, border):
+        
+        s = pg.Surface(size, pg.SRCALPHA)
+        if len(self.stats["history"]) == 0:
+            return s
+        num_buckets = max(math.ceil(math.log2(max(self.stats["history"])*0.01)*2), 0)+1
+        buckets = [0 for i in range(num_buckets)]
+
+        for i in self.stats["history"]:
+            if i <= 100:
+                buckets[0] += 1
+            else:
+                buckets[math.ceil(math.log2(i*0.01)*2)] += 1
+        
+        highest = max(buckets)
+
+        vertical_interval = highest/8
+        log_mod = math.log10(vertical_interval)%1
+        if log_mod < math.log10(2):
+            vertical_interval = 10**int(math.log10(vertical_interval))
+        elif log_mod < math.log10(5):
+            vertical_interval = 2*10**int(math.log10(vertical_interval))
+        else:
+            vertical_interval = 5*10**int(math.log10(vertical_interval))
+
+        bar_width = float(s.get_width()-border*2)/num_buckets
+        bar_scale = float(s.get_height()-border*2)/highest
+
+        pg.draw.line(s, BLACK, (border, border), (border, s.get_height()-border), 5)
+        pg.draw.line(s, BLACK, (border, s.get_height()-border), (s.get_width(), s.get_height()-border), 5)
+
+        i = s.get_height()-border
+        j = 0
+        while i > border-1:
+            pg.draw.line(s, BLACK, (border, int(i)), (s.get_width(), int(i)), 3)
+            center_text(s, lil_font, str(j), BLACK, border//2, int(i))
+            i -= bar_scale*vertical_interval
+            j += vertical_interval
+        
+        for i in range(num_buckets):
+            if i%2 == 0:
+                continue
+            center_text(s, lil_font, f"{short_number(100*2**(i//2))}", BLACK, border+bar_width*i, s.get_height()-border//2)
+
+        for i, j in enumerate(buckets):
+            bar_height = int(bar_scale*j)
+            pg.draw.rect(s, BLACK, (int(bar_width*i)+border, s.get_height()-border-bar_height, int(bar_width+1), bar_height))
+
+        return s
+
 # get the width of a grid with a border
 def get_grid_width(tile_width, border_width, tiles):
     return tile_width*tiles+border_width*(tiles+1)
+
+def short_number(number):
+
+    suffixes = ['','k','M','G','T','P','E','Z','Y']
+    suffix = int(math.log10(number)//3)
+    mantissa = float(number)/1000**suffix
+    if mantissa >= 100:
+        mantissa = round(mantissa)
+    elif mantissa >= 10:
+        mantissa = round(mantissa, 1)
+    else:
+        mantissa = round(mantissa, 2)
+    return str(mantissa)+suffixes[suffix]
+    
 
 # get the colour of a tile
 # returns a colour
@@ -936,6 +1000,8 @@ def configure_ui(profile):
                         text="svalbard"),
         "history": Button((DISPLAY_WIDTH-button_size*2, button_size+border_size, button_size*2, button_size),
                         text="history"),
+        "charts": Button((DISPLAY_WIDTH-button_size*2, (button_size+border_size)*2, button_size*2, button_size),
+                        text="chart"),
         "back": Button((button_size, DISPLAY_HEIGHT-button_size, DISPLAY_WIDTH-button_size*2, button_size),
                         text="back"),
     }, "profile": {
@@ -965,7 +1031,11 @@ def configure_ui(profile):
                         text="export"),
         "back": Button((button_size, DISPLAY_HEIGHT-button_size, DISPLAY_WIDTH-button_size*2, button_size),
                         text="back"),
+    }, "charts": {
+        "back": Button((button_size, DISPLAY_HEIGHT-button_size, DISPLAY_WIDTH-button_size*2, button_size),
+                        text="back"),
     }
+
     }
 
     for i in range(5):
@@ -1156,7 +1226,12 @@ while game_running:
                     elif b == "history":
                         menu = "history"
                         buttons["history"]["export_history"].update_text("export")
-                        page = 1     
+                        page = 1  
+
+                    elif b == "charts":
+                        menu = "charts"
+
+                        chart_surf = profile.chart_stats((DISPLAY_WIDTH-button_size*2, DISPLAY_HEIGHT-button_size*2), stats_size/2)
 
                     elif b == "profile":
                         menu = "profile"
@@ -1516,7 +1591,12 @@ while game_running:
                 main_dis.blit(t, pos)
                 if pg.Rect(pos, (stats_size, stats_size)).collidepoint(pg.mouse.get_pos()):
                     center_text(main_dis, huge_font, f"game #{index+1}", BLACK, DISPLAY_WIDTH*0.5, DISPLAY_HEIGHT-button_size*1.5)
+    
+    elif menu == "charts":
 
+        center_text(main_dis, huge_font, "chart", BLACK, DISPLAY_WIDTH*0.5, button_size*0.5)
+
+        main_dis.blit(chart_surf, (button_size, button_size))
     elif menu == "profile":
         center_text(main_dis, huge_font, "profile", BLACK, DISPLAY_WIDTH*0.5, button_size*0.5)
         if profile.name == "":
