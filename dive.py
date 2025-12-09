@@ -4,7 +4,6 @@ import random
 import math
 import pickle
 import csv
-from copy import deepcopy
 
 VERSION = "0.2.0"
 
