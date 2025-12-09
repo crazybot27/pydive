@@ -6,7 +6,7 @@ import pickle
 import csv
 from copy import deepcopy
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 DISPLAY_SIZE = (1080, 720)
 DISPLAY_WIDTH, DISPLAY_HEIGHT = DISPLAY_SIZE
